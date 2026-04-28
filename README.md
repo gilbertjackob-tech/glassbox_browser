@@ -45,3 +45,7 @@ GlassBox uses a local SQLite database for persistent intelligence. No cloud or r
 
 ---
 Built with Native Electron, SQLite, React, and Tailwind.
+
+how to push?
+git add -A ; git commit -m "commit msg default' ; git push origin main
+

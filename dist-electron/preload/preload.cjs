@@ -6614,7 +6614,13 @@ import_electron.contextBridge.exposeInMainWorld("glassbox", {
   activateTab: (tabId, bounds) => import_electron.ipcRenderer.invoke("gb:activate-tab", { tabId, bounds })
 });
 import_electron.contextBridge.exposeInMainWorld("api", {
-  navigate: (url) => import_electron.ipcRenderer.invoke("navigate", url)
+  navigate: (tabId, url) => import_electron.ipcRenderer.invoke("gb:navigate", { tabId, url })
+});
+import_electron.contextBridge.exposeInMainWorld("windowControls", {
+  minimize: () => import_electron.ipcRenderer.invoke("gb:window-minimize"),
+  toggleMaximize: () => import_electron.ipcRenderer.invoke("gb:window-toggle-maximize"),
+  close: () => import_electron.ipcRenderer.invoke("gb:window-close"),
+  closeTab: (tabId) => import_electron.ipcRenderer.invoke("gb:window-close-tab", { tabId })
 });
 var lastHash = "";
 var scanTimeout = null;

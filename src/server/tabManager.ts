@@ -6,26 +6,28 @@ import { createRequire } from 'module';
 const require = createRequire(typeof __filename === 'string' ? __filename : `${process.cwd()}\\src\\server\\tabManager.ts`);
 
 // Defensive Electron import for Node/Vite preview
-let app: any, BrowserWindow: any, BrowserView: any, session: any;
+let app: any, BrowserView: any, session: any;
 try {
   const electron = require('electron');
   if (!electron || !electron.app || !electron.session || !electron.BrowserView) {
     throw new Error('Electron components not found');
   }
   app = electron.app;
-  BrowserWindow = electron.BrowserWindow;
   BrowserView = electron.BrowserView;
   session = electron.session;
 } catch (e) {
   // Mock for web preview
   app = { getAppPath: () => process.cwd() };
-  BrowserWindow = class {};
   BrowserView = class {
     webContents = {
       on: () => {},
       getURL: () => 'about:blank',
-      loadURL: () => {},
-      executeJavaScript: () => {}
+      loadURL: async () => {},
+      executeJavaScript: async () => {},
+      insertText: () => {},
+      removeAllListeners: () => {},
+      isDestroyed: () => false,
+      close: () => {},
     };
     setBounds() {}
     setAutoResize() {}
@@ -47,6 +49,7 @@ class TabManager {
   private tabs: Map<string, TabMetadata> = new Map();
   private activeTabId: string | null = null;
   private window: any | null = null;
+  private lastBounds = { x: 0, y: 80, width: 1280, height: 720 };
 
   setWindow(window: any) {
     this.window = window;
@@ -63,10 +66,10 @@ class TabManager {
 
     const view = new BrowserView({
       webPreferences: {
-        preload: join(app.getAppPath(), 'dist-electron', 'preload.js'),
+        preload: join(app.getAppPath(), 'dist-electron', 'preload', 'preload.cjs'),
         session: sess,
         contextIsolation: true,
-        sandbox: true,
+        sandbox: false,
       }
     });
 
@@ -88,8 +91,8 @@ class TabManager {
 
     this.tabs.set(id, tab);
 
-    view.webContents.on('did-start-loading', () => console.log("Loading started"));
-    view.webContents.on('did-finish-load', () => console.log("Page loaded:", view.webContents.getURL()));
+    view.webContents.on('did-start-loading', () => console.log('Loading started'));
+    view.webContents.on('did-finish-load', () => console.log('Page loaded:', view.webContents.getURL()));
 
     // Sync metadata on navigation
     view.webContents.on('page-title-updated', (e, title) => {
@@ -129,21 +132,57 @@ class TabManager {
     `).run(uuidv4(), profileId, url, title);
   }
 
+  private clampBounds(bounds: { x: number; y: number; width: number; height: number }) {
+    const normalized = {
+      x: Math.max(0, Math.round(bounds.x)),
+      y: Math.max(0, Math.round(bounds.y)),
+      width: Math.max(1, Math.round(bounds.width)),
+      height: Math.max(1, Math.round(bounds.height)),
+    };
+
+    if (!this.window) {
+      return normalized;
+    }
+
+    const contentBounds = typeof this.window.getContentBounds === 'function'
+      ? this.window.getContentBounds()
+      : this.window.getBounds();
+
+    const maxWidth = Math.max(1, contentBounds.width - normalized.x);
+    const maxHeight = Math.max(1, contentBounds.height - normalized.y);
+
+    return {
+      x: normalized.x,
+      y: normalized.y,
+      width: Math.min(normalized.width, maxWidth),
+      height: Math.min(normalized.height, maxHeight),
+    };
+  }
+
   setActiveTab(id: string, bounds: { x: number; y: number; width: number; height: number }) {
     const tab = this.tabs.get(id);
     if (tab && this.window) {
       this.activeTabId = id;
+      this.lastBounds = this.clampBounds(bounds);
       this.window.setBrowserView(tab.view);
-      
-      // Real bounds sync
-      tab.view.setBounds({
-        x: Math.round(bounds.x),
-        y: Math.round(bounds.y),
-        width: Math.round(bounds.width),
-        height: Math.round(bounds.height)
-      });
+
+      tab.view.setBounds(this.lastBounds);
       tab.view.setAutoResize({ width: true, height: true });
     }
+  }
+
+  async navigateTab(id: string, url: string) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error('TAB_NOT_FOUND');
+    }
+
+    if (this.activeTabId !== id) {
+      this.setActiveTab(id, this.lastBounds);
+    }
+
+    await tab.view.webContents.loadURL(url);
+    return { success: true, url };
   }
 
   findTabByWebContents(wc: any) {
@@ -163,16 +202,77 @@ class TabManager {
     }));
   }
 
+  handleHeartbeat(wc: any, data: { url?: string; title?: string; domHash?: string; snapshot?: any[] }) {
+    const tab = this.findTabByWebContents(wc);
+    if (!tab) return;
+
+    const nextUrl = data.url || tab.url;
+    const nextTitle = data.title || tab.title;
+    const nextDomHash = data.domHash || '';
+    const snapshot = Array.isArray(data.snapshot) ? data.snapshot : [];
+
+    tab.url = nextUrl;
+    tab.title = nextTitle;
+    tab.elements = snapshot;
+
+    if (tab.domHash === nextDomHash) {
+      return;
+    }
+
+    tab.domHash = nextDomHash;
+
+    db.prepare(`
+      INSERT INTO dom_snapshots (id, tab_id, profile_id, url, dom_hash, snapshot_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      uuidv4(),
+      tab.id,
+      tab.profileId,
+      nextUrl,
+      nextDomHash,
+      JSON.stringify(snapshot)
+    );
+  }
+
+  private destroyTabView(tab: TabMetadata) {
+    if (this.window?.getBrowserView?.() === tab.view) {
+      this.window.setBrowserView(null);
+    }
+
+    const webContents = tab.view.webContents as {
+      isDestroyed: () => boolean;
+      removeAllListeners: () => void;
+      close: () => void;
+    };
+
+    if (!webContents.isDestroyed()) {
+      webContents.removeAllListeners();
+      webContents.close();
+    }
+  }
+
   async closeTab(id: string) {
     const tab = this.tabs.get(id);
-    if (tab) {
-      if (this.activeTabId === id) {
-        this.window?.setBrowserView(null);
-        this.activeTabId = null;
-      }
-      (tab.view.webContents as any).destroy();
-      this.tabs.delete(id);
+    if (!tab) {
+      return { nextActiveTabId: this.activeTabId };
     }
+
+    const remainingTabs = Array.from(this.tabs.values()).filter((entry) => entry.id !== id);
+    const nextActiveTabId = this.activeTabId === id ? (remainingTabs[0]?.id || null) : this.activeTabId;
+
+    this.destroyTabView(tab);
+    this.tabs.delete(id);
+    db.prepare('DELETE FROM tabs WHERE id = ?').run(id);
+
+    if (nextActiveTabId && this.window) {
+      this.activeTabId = nextActiveTabId;
+      this.setActiveTab(nextActiveTabId, this.lastBounds);
+    } else if (this.activeTabId === id) {
+      this.activeTabId = null;
+      this.window?.setBrowserView(null);
+    }
+
+    return { nextActiveTabId };
   }
 }
 
