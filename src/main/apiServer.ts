@@ -24,6 +24,27 @@ const downloadTimestampColumn = downloadColumns.includes('timestamp') ? 'timesta
 const actionsColumns = getTableColumns('actions');
 const actionLogsColumns = getTableColumns('action_logs');
 
+function getSettingValue(key: string, fallback: string) {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value?: string } | undefined;
+  return row?.value || fallback;
+}
+
+function setSettingValue(key: string, value: string) {
+  db.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(key, value);
+}
+
+function resolveProfileId(profileId: unknown) {
+  return typeof profileId === 'string' && profileId.trim().length > 0
+    ? profileId
+    : getSettingValue('active_profile_id', 'default');
+}
+
 let serverPromise: Promise<void> | null = null;
 
 export function startApiServer(port: number = 3000): Promise<void> {
@@ -41,6 +62,25 @@ export function startApiServer(port: number = 3000): Promise<void> {
       res.json(db.prepare('SELECT * FROM profiles ORDER BY created_at ASC').all());
     });
 
+    app.get('/api/settings', (_req, res) => {
+      res.json({
+        activeProfileId: getSettingValue('active_profile_id', 'default'),
+      });
+    });
+
+    app.put('/api/settings', (req, res) => {
+      const activeProfileId = resolveProfileId(req.body?.activeProfileId);
+      const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(activeProfileId);
+
+      if (!profile) {
+        res.status(400).json({ error: 'Profile not found' });
+        return;
+      }
+
+      setSettingValue('active_profile_id', activeProfileId);
+      res.json({ success: true, activeProfileId });
+    });
+
     app.post('/api/profiles', (req, res) => {
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       if (!name) {
@@ -53,6 +93,58 @@ export function startApiServer(port: number = 3000): Promise<void> {
         .run(id, name, `persist:profile-${id}`);
 
       res.json({ id, name });
+    });
+
+    app.patch('/api/profiles/:id', (req, res) => {
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+      if (!name) {
+        res.status(400).json({ error: 'Name is required' });
+        return;
+      }
+
+      const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(req.params.id);
+      if (!profile) {
+        res.status(404).json({ error: 'Profile not found' });
+        return;
+      }
+
+      db.prepare('UPDATE profiles SET name = ? WHERE id = ?').run(name, req.params.id);
+      res.json({ success: true, id: req.params.id, name });
+    });
+
+    app.delete('/api/profiles/:id', async (req, res) => {
+      const profileId = req.params.id;
+      if (profileId === 'default') {
+        res.status(400).json({ error: 'Default profile cannot be deleted' });
+        return;
+      }
+
+      const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(profileId);
+      if (!profile) {
+        res.status(404).json({ error: 'Profile not found' });
+        return;
+      }
+
+      const tabs = tabManager.getAllTabs().filter((tab) => tab.profileId === profileId);
+      for (const tab of tabs) {
+        await tabManager.closeTab(tab.tabId);
+      }
+
+      db.prepare('DELETE FROM profiles WHERE id = ?').run(profileId);
+      db.prepare('DELETE FROM tabs WHERE profile_id = ?').run(profileId);
+      db.prepare('DELETE FROM history WHERE profile_id = ?').run(profileId);
+      db.prepare('DELETE FROM downloads WHERE profile_id = ?').run(profileId);
+      db.prepare('DELETE FROM actions WHERE profile_id = ?').run(profileId);
+      db.prepare('DELETE FROM tasks WHERE profile_id = ?').run(profileId);
+      db.prepare('DELETE FROM skills WHERE profile_id = ?').run(profileId);
+      db.prepare('DELETE FROM dom_snapshots WHERE profile_id = ?').run(profileId);
+      db.prepare('DELETE FROM saved_passwords WHERE profile_id = ?').run(profileId);
+
+      if (getSettingValue('active_profile_id', 'default') === profileId) {
+        setSettingValue('active_profile_id', 'default');
+      }
+
+      res.json({ success: true, activeProfileId: getSettingValue('active_profile_id', 'default') });
     });
 
     app.get('/api/tabs', (_req, res) => {
@@ -87,18 +179,19 @@ export function startApiServer(port: number = 3000): Promise<void> {
 
     app.get('/api/memory/search', async (req, res) => {
       const query = typeof req.query.q === 'string' ? req.query.q : '';
-      const profileId = typeof req.query.profileId === 'string' ? req.query.profileId : 'default';
+      const profileId = resolveProfileId(req.query.profileId);
       const results = await memoryService.searchMemory(query, profileId);
       res.json(results);
     });
 
     app.get('/api/memory/history', (req, res) => {
       const query = typeof req.query.q === 'string' ? req.query.q : '';
-      let sql = 'SELECT * FROM history';
-      const params: string[] = [];
+      const profileId = resolveProfileId(req.query.profileId);
+      let sql = 'SELECT * FROM history WHERE profile_id = ?';
+      const params: string[] = [profileId];
 
       if (query) {
-        sql += ' WHERE url LIKE ? OR title LIKE ?';
+        sql += ' AND (url LIKE ? OR title LIKE ?)';
         params.push(`%${query}%`, `%${query}%`);
       }
 
@@ -106,17 +199,24 @@ export function startApiServer(port: number = 3000): Promise<void> {
       res.json(db.prepare(sql).all(...params));
     });
 
+    app.delete('/api/memory/history', (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
+      db.prepare('DELETE FROM history WHERE profile_id = ?').run(profileId);
+      res.json({ success: true });
+    });
+
     app.get('/api/memory/downloads', (req, res) => {
       const query = typeof req.query.q === 'string' ? req.query.q : '';
-      let sql = 'SELECT * FROM downloads';
-      const params: string[] = [];
+      const profileId = resolveProfileId(req.query.profileId);
+      let sql = 'SELECT * FROM downloads WHERE profile_id = ?';
+      const params: string[] = [profileId];
 
       if (query) {
         const clauses: string[] = [];
         if (downloadFileNameColumn) clauses.push(`${downloadFileNameColumn} LIKE ?`);
         if (downloadUrlColumn) clauses.push(`${downloadUrlColumn} LIKE ?`);
         if (clauses.length > 0) {
-          sql += ` WHERE (${clauses.join(' OR ')})`;
+          sql += ` AND (${clauses.join(' OR ')})`;
           params.push(...clauses.map(() => `%${query}%`));
         }
       }
@@ -125,7 +225,14 @@ export function startApiServer(port: number = 3000): Promise<void> {
       res.json(db.prepare(sql).all(...params));
     });
 
-    app.get('/api/memory/logs', (_req, res) => {
+    app.delete('/api/memory/downloads', (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
+      db.prepare('DELETE FROM downloads WHERE profile_id = ?').run(profileId);
+      res.json({ success: true });
+    });
+
+    app.get('/api/memory/logs', (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
       if (actionsColumns.length > 0) {
         const intentExpr = actionsColumns.includes('intent') ? 'COALESCE(intent, \'\') AS intent' : "'' AS intent";
         const successExpr = actionsColumns.includes('success') ? 'COALESCE(success, 0) AS success' : '0 AS success';
@@ -143,20 +250,60 @@ export function startApiServer(port: number = 3000): Promise<void> {
             NULL AS before_dom_hash,
             NULL AS after_dom_hash
           FROM actions
+          WHERE profile_id = ?
           ORDER BY ${actionsColumns.includes('created_at') ? 'created_at' : 'id'} DESC
           LIMIT 50
-        `).all();
+        `).all(profileId);
 
         res.json(logs);
         return;
       }
 
       if (actionLogsColumns.length > 0) {
-        res.json(db.prepare('SELECT * FROM action_logs ORDER BY timestamp DESC LIMIT 50').all());
+        res.json(db.prepare('SELECT * FROM action_logs WHERE profile_id = ? ORDER BY timestamp DESC LIMIT 50').all(profileId));
         return;
       }
 
       res.json([]);
+    });
+
+    app.get('/api/passwords', (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
+      const passwords = db.prepare(`
+        SELECT id, profile_id, origin, username, password, created_at, updated_at
+        FROM saved_passwords
+        WHERE profile_id = ?
+        ORDER BY updated_at DESC, created_at DESC
+      `).all(profileId);
+      res.json(passwords);
+    });
+
+    app.post('/api/passwords', (req, res) => {
+      const profileId = resolveProfileId(req.body?.profileId);
+      const origin = typeof req.body?.origin === 'string' ? req.body.origin.trim() : '';
+      const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+      if (!origin || !username || !password) {
+        res.status(400).json({ error: 'Origin, username, and password are required' });
+        return;
+      }
+
+      const id = uuidv4();
+      db.prepare(`
+        INSERT INTO saved_passwords (id, profile_id, origin, username, password, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(profile_id, origin, username) DO UPDATE SET
+          password = excluded.password,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(id, profileId, origin, username, password);
+
+      res.json({ success: true });
+    });
+
+    app.delete('/api/passwords/:id', (req, res) => {
+      db.prepare('DELETE FROM saved_passwords WHERE id = ?').run(req.params.id);
+      res.json({ success: true });
     });
 
     if (process.env.NODE_ENV !== 'development') {
