@@ -47,7 +47,14 @@ contextBridge.exposeInMainWorld('glassbox', {
 });
 
 contextBridge.exposeInMainWorld('api', {
-  navigate: (url: string) => ipcRenderer.invoke('navigate', url)
+  navigate: (tabId: string, url: string) => ipcRenderer.invoke('gb:navigate', { tabId, url })
+});
+
+contextBridge.exposeInMainWorld('windowControls', {
+  minimize: () => ipcRenderer.invoke('gb:window-minimize'),
+  toggleMaximize: () => ipcRenderer.invoke('gb:window-toggle-maximize'),
+  close: () => ipcRenderer.invoke('gb:window-close'),
+  closeTab: (tabId: string) => ipcRenderer.invoke('gb:window-close-tab', { tabId })
 });
 
 // Periodic Heartbeat to Main Process

@@ -16,15 +16,56 @@
 }
 
 @layer base {
+  :root,
+  [data-theme='dark'] {
+    --color-gb-bg: #09090B;
+    --color-gb-surface: #18181B;
+    --color-gb-surface-bright: #27272A;
+    --color-gb-border: #27272A;
+    --color-gb-accent-primary: #3B82F6;
+    --color-gb-accent-success: #10B981;
+    --color-gb-text: #CBD5E1;
+    --color-gb-text-dim: #64748B;
+  }
+
+  [data-theme='light'] {
+    --color-gb-bg: #F8FAFC;
+    --color-gb-surface: #FFFFFF;
+    --color-gb-surface-bright: #E2E8F0;
+    --color-gb-border: #CBD5E1;
+    --color-gb-accent-primary: #2563EB;
+    --color-gb-accent-success: #059669;
+    --color-gb-text: #0F172A;
+    --color-gb-text-dim: #64748B;
+  }
+
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
   body {
     @apply bg-gb-bg text-gb-text font-sans overflow-hidden select-none;
+  }
+
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
   }
 }
 
 .glass-box-grid {
   background-image: 
-    linear-gradient(to right, #18181b 1px, transparent 1px),
-    linear-gradient(to bottom, #18181b 1px, transparent 1px);
+    linear-gradient(to right, color-mix(in srgb, var(--color-gb-border) 70%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--color-gb-border) 70%, transparent) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
@@ -42,3 +83,10 @@
   @apply bg-gb-border rounded-full hover:bg-gb-text-dim/30;
 }
 
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

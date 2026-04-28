@@ -1,28 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Globe, 
-  Plus, 
-  X, 
-  ArrowLeft, 
-  ArrowRight, 
-  RotateCw, 
-  Search, 
-  Terminal, 
-  History, 
-  Database, 
-  Box, 
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
   Activity,
-  ChevronRight,
-  ChevronDown,
+  ArrowLeft,
+  ArrowRight,
+  Bookmark,
+  Box,
+  Check,
+  Database,
+  Download,
+  Globe,
+  History,
   Monitor,
-  Cpu,
-  Download
+  Moon,
+  Plus,
+  RotateCw,
+  Settings,
+  Sun,
+  Terminal,
+  X,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 
 import { normalizeUrl, resolveNavigationInput, SEARCH_ENGINE_OPTIONS, type SearchEngineName } from './lib/urlUtils';
-
-// --- Types ---
 
 interface Tab {
   tabId: string;
@@ -51,7 +49,53 @@ interface ActionLog {
   after_dom_hash?: string;
 }
 
-// --- App Component ---
+type ThemePreference = 'system' | 'light' | 'dark';
+type UtilityPanelId = 'memory' | 'skills' | 'bookmarks' | 'dom' | 'logs' | 'history' | 'downloads';
+
+const utilityPanelConfigs: Array<{
+  id: UtilityPanelId;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}> = [
+  { id: 'memory', label: 'Memory Search', description: 'Search history and skill memory.', icon: Database },
+  { id: 'skills', label: 'Suggested Skills', description: 'Show matched automation skills.', icon: Activity },
+  { id: 'bookmarks', label: 'Bookmark Cache', description: 'Show cached quick links.', icon: Bookmark },
+  { id: 'dom', label: 'DOM Snapshot', description: 'Inspect scanned page elements.', icon: Terminal },
+  { id: 'logs', label: 'Activity Log', description: 'Show recent automation actions.', icon: Activity },
+  { id: 'history', label: 'Browsing History', description: 'Search visited pages.', icon: History },
+  { id: 'downloads', label: 'Downloads', description: 'Review captured downloads.', icon: Download },
+];
+
+const themeOptions: Array<{
+  value: ThemePreference;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}> = [
+  { value: 'system', label: 'System', icon: Monitor },
+  { value: 'light', label: 'Day', icon: Sun },
+  { value: 'dark', label: 'Night', icon: Moon },
+];
+
+function getInitialThemePreference(): ThemePreference {
+  if (typeof window === 'undefined') return 'system';
+  const saved = window.localStorage.getItem('gb-theme');
+  return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+}
+
+function getInitialUtilityPanels(): UtilityPanelId[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem('gb-utility-panels') || '[]');
+    if (!Array.isArray(saved)) return [];
+
+    const validPanelIds = new Set(utilityPanelConfigs.map((panel) => panel.id));
+    return saved.filter((panelId): panelId is UtilityPanelId => validPanelIds.has(panelId));
+  } catch {
+    return [];
+  }
+}
 
 export default function App() {
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -67,144 +111,173 @@ export default function App() {
   const [downloadsSearchQuery, setDownloadsSearchQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
-  const [suggestedSkills, setSuggestedSkills] = useState<any[]>([]);
+  const [suggestedSkills] = useState<any[]>([]);
   const [searchEngine, setSearchEngine] = useState<SearchEngineName>('duckduckgo');
   const [isNavigating, setIsNavigating] = useState(false);
   const [navError, setNavError] = useState<string | null>(null);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [enabledPanels, setEnabledPanels] = useState<UtilityPanelId[]>(getInitialUtilityPanels);
   const browserViewRef = useRef<HTMLDivElement>(null);
+  const hasInitializedRef = useRef(false);
 
-  const activeTab = tabs.find((t: Tab) => t.tabId === activeTabId);
+  const activeTab = tabs.find((tab) => tab.tabId === activeTabId);
 
-  // Sync Electron View positioning
-  useEffect(() => {
+  const syncBrowserViewBounds = (tabIdToSync: string | null = activeTabId) => {
+    if (!tabIdToSync || !browserViewRef.current || !(window as any).glassbox) return;
+
+    const rect = browserViewRef.current.getBoundingClientRect();
+    (window as any).glassbox.activateTab(tabIdToSync, {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    });
+  };
+
+  useLayoutEffect(() => {
     if (!activeTabId || !browserViewRef.current) return;
 
-    const syncBounds = () => {
-      const rect = browserViewRef.current?.getBoundingClientRect();
-      if (rect && (window as any).glassbox) {
-        (window as any).glassbox.activateTab(activeTabId, {
-          x: Math.round(rect.x),
-          y: Math.round(rect.y),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height)
-        });
-      }
+    const observer = new ResizeObserver(() => syncBrowserViewBounds());
+    observer.observe(browserViewRef.current);
+    syncBrowserViewBounds();
+
+    const rafId = requestAnimationFrame(() => syncBrowserViewBounds());
+    const secondRafId = requestAnimationFrame(() => requestAnimationFrame(() => syncBrowserViewBounds()));
+    const resizeHandler = () => syncBrowserViewBounds();
+
+    window.addEventListener('resize', resizeHandler);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', resizeHandler);
+      cancelAnimationFrame(rafId);
+      cancelAnimationFrame(secondRafId);
+    };
+  }, [activeTabId, tabs.length, enabledPanels.length]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const applyTheme = () => {
+      const resolvedTheme = themePreference === 'system'
+        ? (mediaQuery.matches ? 'dark' : 'light')
+        : themePreference;
+
+      document.documentElement.dataset.theme = resolvedTheme;
+      document.documentElement.dataset.themePreference = themePreference;
+      window.localStorage.setItem('gb-theme', themePreference);
     };
 
-    const observer = new ResizeObserver(syncBounds);
-    observer.observe(browserViewRef.current);
-    syncBounds();
+    applyTheme();
+    mediaQuery.addEventListener('change', applyTheme);
 
-    return () => observer.disconnect();
-  }, [activeTabId]);
+    return () => mediaQuery.removeEventListener('change', applyTheme);
+  }, [themePreference]);
 
-  // Periodic metadata sync (history/logs)
   useEffect(() => {
-    let isInitial = true;
+    window.localStorage.setItem('gb-utility-panels', JSON.stringify(enabledPanels));
+    requestAnimationFrame(() => syncBrowserViewBounds());
+  }, [enabledPanels]);
+
+  useEffect(() => {
     const init = async () => {
+      if (hasInitializedRef.current) return;
+      hasInitializedRef.current = true;
+
       try {
         await fetchProfiles();
-        const res = await fetch('/api/tabs');
-        const data = await res.json();
-        const filteredData = data.filter((t: any) => t.profileId === activeProfileId);
-        if (filteredData.length === 0) {
-          // Automatically create default tab on startup
-          createTab();
-        } else {
-          setTabs(filteredData);
-          setActiveTabId(filteredData[0].tabId);
-          console.log('Tabs:', filteredData.length);
-          console.log('Active:', filteredData[0].tabId);
+        const initialTabs = await fetchTabs(activeProfileId);
+        if (initialTabs.length === 0) {
+          await createTab();
         }
       } catch {
-        // ignore init fails or retries
+        // ignore init failures
       }
-      fetchLogs();
-      fetchHistory();
-      fetchDownloads();
-    };
-    init();
 
-    const interval = setInterval(() => {
-      fetchTabs();
-      fetchLogs();
-      // To avoid stale closures we won't pass params here, just let them use default
-    }, 3000);
-    return () => clearInterval(interval);
+      await fetchLogs();
+      await fetchHistory();
+      await fetchDownloads();
+    };
+
+    init();
   }, []);
 
   useEffect(() => {
     if (activeTab && activeTab.url !== 'about:blank' && !isNavigating) {
       setUrlInput(activeTab.url);
+    } else if (!activeTab) {
+      setUrlInput('');
     }
-  }, [activeTab?.url]);
+  }, [activeTab?.url, isNavigating]);
+
+  useEffect(() => {
+    if (!activeTabId) {
+      setDomSnapshot([]);
+      return;
+    }
+
+    requestAnimationFrame(() => syncBrowserViewBounds(activeTabId));
+    updateActiveTabData(activeTabId);
+  }, [activeTabId]);
 
   const fetchProfiles = async () => {
     try {
       const res = await fetch('/api/profiles');
-      const data = await res.json();
-      setProfiles(data);
+      setProfiles(await res.json());
     } catch {
       // ignore
     }
   };
 
-  const fetchTabs = async (profileId?: string) => {
+  const fetchTabs = async (profileId?: string, preferredActiveTabId?: string | null) => {
     try {
       const res = await fetch('/api/tabs');
       const data = await res.json();
       const currentProfileId = profileId || activeProfileId;
-      const filteredData = data.filter((t: any) => t.profileId === currentProfileId);
+      const filteredData = data.filter((tab: any) => tab.profileId === currentProfileId);
+
       setTabs(filteredData);
-      
-      // If active tab doesn't belong to current profile, switch to the first one available or null
-      setTabs((currentTabs: Tab[]) => {
-        setActiveTabId((currentActive: string | null) => {
-          if (!currentTabs.find((t: Tab) => t.tabId === currentActive)) {
-            return currentTabs.length > 0 ? currentTabs[0].tabId : null;
-          }
-          return currentActive;
-        });
-        return currentTabs;
+      setActiveTabId((currentActive) => {
+        if (filteredData.length === 0) return null;
+        if (preferredActiveTabId && filteredData.some((tab: Tab) => tab.tabId === preferredActiveTabId)) return preferredActiveTabId;
+        if (filteredData.some((tab: Tab) => tab.tabId === currentActive)) return currentActive;
+        return filteredData[0].tabId;
       });
+
+      return filteredData as Tab[];
     } catch {
-      // ignore
+      return [] as Tab[];
     }
   };
 
   const createProfile = async () => {
     const name = prompt('Enter new profile name:');
     if (!name) return;
+
     const res = await fetch('/api/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name }),
     });
+
     const newProfile = await res.json();
     await fetchProfiles();
-    switchProfile(newProfile.id);
+    await switchProfile(newProfile.id);
   };
 
   const switchProfile = async (profileId: string) => {
     setActiveProfileId(profileId);
-    const res = await fetch('/api/tabs');
-    const data = await res.json();
-    const filteredData = data.filter((t: any) => t.profileId === profileId);
-    setTabs(filteredData);
-    
+    const filteredData = await fetchTabs(profileId);
+
     if (filteredData.length === 0) {
-      // Auto-create tab if none exists in this profile
-      const createRes = await fetch('/api/tabs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId })
-      });
-      const { id: tabId } = await createRes.json();
-      setTabs([{ tabId, profileId, url: 'about:blank', title: 'New Tab' }]);
-      setActiveTabId(tabId);
-    } else {
-      setActiveTabId(filteredData[0].tabId);
+      await createTab(undefined, profileId);
+      return;
     }
+
+    const nextActiveTabId = filteredData[0].tabId;
+    setActiveTabId(nextActiveTabId);
+    requestAnimationFrame(() => syncBrowserViewBounds(nextActiveTabId));
   };
 
   const fetchLogs = async () => {
@@ -242,6 +315,7 @@ export default function App() {
       setSearchResults(null);
       return;
     }
+
     const res = await fetch(`/api/memory/search?q=${encodeURIComponent(q)}`);
     setSearchResults(await res.json());
   };
@@ -259,46 +333,67 @@ export default function App() {
   const updateActiveTabData = async (specificTabId?: string) => {
     const id = specificTabId || activeTabId;
     if (!id) return;
+
     const domRes = await fetch(`/api/tabs/${id}/dom`);
     setDomSnapshot(await domRes.json());
   };
 
-  const createTab = async (urlToAutoNavigate?: string) => {
+  const createTab = async (urlToAutoNavigate?: string, profileIdOverride?: string) => {
     const res = await fetch('/api/tabs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profileId: activeProfileId })
+      body: JSON.stringify({ profileId: profileIdOverride || activeProfileId }),
     });
+
     const { id: tabId } = await res.json();
-    setTabs((prev: Tab[]) => {
-      const newTabs: Tab[] = [...prev, { tabId, profileId: activeProfileId, url: 'about:blank', title: 'New Tab' }];
-      console.log('Tabs:', newTabs.length);
-      return newTabs;
-    });
+
+    await fetchTabs(profileIdOverride || activeProfileId, tabId);
     setActiveTabId(tabId);
-    console.log('Active:', tabId);
-    
+    requestAnimationFrame(() => syncBrowserViewBounds(tabId));
+
     if (typeof urlToAutoNavigate === 'string' && urlToAutoNavigate.trim().length > 0) {
-      executeNavigate(tabId, urlToAutoNavigate);
+      await executeNavigate(tabId, urlToAutoNavigate);
     }
+
+    return tabId;
   };
 
   const closeTab = async (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    await fetch(`/api/tabs/${tabId}`, { method: 'DELETE' });
-    await fetchTabs();
-    if (activeTabId === tabId) setActiveTabId(null);
+
+    const closeResult = await (window as any).windowControls?.closeTab?.(tabId);
+    const nextActiveTabId = closeResult?.nextActiveTabId || null;
+
+    await fetchTabs(activeProfileId, nextActiveTabId);
+    setActiveTabId(nextActiveTabId);
+
+    if (nextActiveTabId) {
+      requestAnimationFrame(() => syncBrowserViewBounds(nextActiveTabId));
+      updateActiveTabData(nextActiveTabId);
+    } else {
+      setDomSnapshot([]);
+    }
+
+    await fetchLogs();
   };
 
   const executeNavigate = async (tabIdToUse: string, url: string) => {
     setNavError(null);
     setIsNavigating(true);
-    
+
     const finalUrl = normalizeUrl(url);
-    
+
     try {
-      if ((window as any).api) {
-         await (window as any).api.navigate(finalUrl);
+      syncBrowserViewBounds(tabIdToUse);
+
+      if ((window as any).api?.navigate) {
+        const data = await (window as any).api.navigate(tabIdToUse, finalUrl);
+        if (!data?.success) {
+          setNavError(data?.reason || 'Navigation failed');
+        } else {
+          setTabs((prev) => prev.map((tab) => (tab.tabId === tabIdToUse ? { ...tab, url: finalUrl } : tab)));
+          setUrlInput(finalUrl);
+        }
       } else {
         const resp = await fetch('/api/actions', {
           method: 'POST',
@@ -306,43 +401,46 @@ export default function App() {
           body: JSON.stringify({
             intent: `Navigate to ${finalUrl}`,
             tabId: tabIdToUse,
+            profileId: activeProfileId,
             actionType: 'navigate',
-            input: finalUrl
-          })
+            input: finalUrl,
+          }),
         });
+
         const data = await resp.json();
-        if (!data.success) {
-          setNavError(data.reason || 'Navigation failed');
+        if (!resp.ok || !data.success) {
+          setNavError(data.reason || data.error || 'Navigation failed');
+        } else {
+          setTabs((prev) => prev.map((tab) => (tab.tabId === tabIdToUse ? { ...tab, url: finalUrl } : tab)));
+          setUrlInput(finalUrl);
         }
       }
-      await fetchTabs();
-    } catch (e) {
+    } catch {
       setNavError('Network error during navigation');
     }
-    
+
     setIsNavigating(false);
+    requestAnimationFrame(() => syncBrowserViewBounds(tabIdToUse));
     updateActiveTabData(tabIdToUse);
   };
 
   const navigate = async () => {
     if (!urlInput) return;
-    
-    const trimmedInput = urlInput.trim();
 
-    const navigationTarget = resolveNavigationInput(trimmedInput, searchEngine);
-
+    const navigationTarget = resolveNavigationInput(urlInput.trim(), searchEngine);
     if (!navigationTarget.url) return;
 
     if (!activeTabId) {
-      createTab(navigationTarget.url);
+      await createTab(navigationTarget.url);
       return;
     }
 
-    executeNavigate(activeTabId, navigationTarget.url);
+    await executeNavigate(activeTabId, navigationTarget.url);
   };
 
   const handleAction = async (type: 'click' | 'type', target: any, input?: string) => {
     if (!activeTabId) return;
+
     await fetch('/api/actions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -350,87 +448,247 @@ export default function App() {
         intent: `${type === 'click' ? 'Click' : 'Type in'} element`,
         tabId: activeTabId,
         actionType: type,
-        target: target,
-        input: input
-      })
+        target,
+        input,
+      }),
     });
+
     updateActiveTabData();
     fetchLogs();
   };
 
+  const toggleUtilityPanel = (panelId: UtilityPanelId) => {
+    setEnabledPanels((currentPanels) => (
+      currentPanels.includes(panelId)
+        ? currentPanels.filter((id) => id !== panelId)
+        : [...currentPanels, panelId]
+    ));
+  };
+
+  const renderUtilityPanel = (panelId: UtilityPanelId) => {
+    switch (panelId) {
+      case 'memory':
+        return (
+          <UtilityPanel key={panelId} title="Memory Search" icon={Database} onClose={() => toggleUtilityPanel(panelId)}>
+            <input
+              type="text"
+              placeholder="Search history and skills..."
+              value={searchQuery}
+              onChange={(e) => searchMemory(e.target.value)}
+              className="w-full rounded border border-gb-border bg-gb-bg px-2 py-1.5 text-[11px] text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+            />
+            <div className="mt-3 space-y-2">
+              {Array.isArray(searchResults) && searchResults.length > 0 ? searchResults.slice(0, 8).map((result: any, index: number) => (
+                <div key={`${result.type || 'result'}-${index}`} className="rounded border border-gb-border bg-gb-surface p-2">
+                  <div className="truncate text-[11px] font-semibold text-gb-text">{result.title || result.name || result.type}</div>
+                  <div className="mt-1 truncate text-[10px] text-gb-text-dim">{result.path || result.url || result.intent}</div>
+                </div>
+              )) : (
+                <EmptyPanelState text={searchQuery.length >= 2 ? 'No memory results.' : 'Type at least two characters.'} />
+              )}
+            </div>
+          </UtilityPanel>
+        );
+
+      case 'skills':
+        return (
+          <UtilityPanel key={panelId} title="Suggested Skills" icon={Activity} onClose={() => toggleUtilityPanel(panelId)}>
+            <div className="space-y-2">
+              {(suggestedSkills.length > 0 ? suggestedSkills : [
+                { name: 'Order Lookup', match: '94%' },
+                { name: 'Research Summary', match: '81%' },
+              ]).map((skill: any, index: number) => (
+                <div key={index} className="rounded border border-gb-border bg-gb-surface p-2">
+                  <div className="text-[11px] font-semibold text-gb-text">{skill.name}</div>
+                  <div className="mt-1 text-[10px] text-gb-text-dim">Match: {skill.match || 'High Confidence'}</div>
+                </div>
+              ))}
+            </div>
+          </UtilityPanel>
+        );
+
+      case 'bookmarks':
+        return (
+          <UtilityPanel key={panelId} title="Bookmark Cache" icon={Bookmark} onClose={() => toggleUtilityPanel(panelId)}>
+            <div className="space-y-2 text-[11px]">
+              {['Fiverr Dashboard', 'Google Search', 'Playwright Docs'].map((bookmark) => (
+                <div key={bookmark} className="flex cursor-pointer items-center gap-2 truncate rounded border border-gb-border bg-gb-surface px-2 py-1.5 text-gb-text-dim hover:text-gb-text">
+                  <Box size={12} /> {bookmark}
+                </div>
+              ))}
+            </div>
+          </UtilityPanel>
+        );
+
+      case 'dom':
+        return (
+          <UtilityPanel key={panelId} title="DOM Snapshot" icon={Terminal} onClose={() => toggleUtilityPanel(panelId)}>
+            <div className="space-y-1.5 font-mono text-[9px]">
+              {domSnapshot.length > 0 ? domSnapshot.slice(0, 50).map((el, index) => (
+                <div key={index} className="rounded p-1 transition-colors hover:bg-gb-surface-bright">
+                  <div className="text-gb-accent-primary">&lt;{el.tag} {el.role && `role="${el.role}"`}&gt;</div>
+                  <div className="truncate pl-3 text-gb-text-dim">selector: {el.id ? `#${el.id}` : (el.selector || el.tag)}</div>
+                </div>
+              )) : (
+                <EmptyPanelState text="No elements scanned." />
+              )}
+            </div>
+          </UtilityPanel>
+        );
+
+      case 'logs':
+        return (
+          <UtilityPanel key={panelId} title="Activity Log" icon={Activity} onClose={() => toggleUtilityPanel(panelId)}>
+            <div className="space-y-3 font-mono text-[9px]">
+              {logs.length > 0 ? logs.map((log) => (
+                <div key={log.id} className={`border-l-2 pl-2 ${log.success ? 'border-gb-accent-success' : 'border-red-500'}`}>
+                  <div className="flex items-center justify-between gap-2 text-gb-text">
+                    <span className="font-bold">{log.action_type.toUpperCase()}</span>
+                    <span className="text-[8px] text-gb-text-dim">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                  <div className="mt-1 truncate text-[8px] text-gb-text-dim">Intent: {log.intent}</div>
+                  {log.reason && <div className="mt-1 text-[8px] text-red-400">{log.reason}</div>}
+                </div>
+              )) : (
+                <EmptyPanelState text="Log cache empty." />
+              )}
+            </div>
+          </UtilityPanel>
+        );
+
+      case 'history':
+        return (
+          <UtilityPanel key={panelId} title="Browsing History" icon={History} onClose={() => toggleUtilityPanel(panelId)}>
+            <input
+              type="text"
+              placeholder="Search history..."
+              value={historySearchQuery}
+              onChange={(e) => handleHistorySearch(e.target.value)}
+              className="w-full rounded border border-gb-border bg-gb-bg px-2 py-1.5 text-[11px] text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+            />
+            <div className="mt-3 space-y-1.5 text-[10px]">
+              {history.length > 0 ? history.map((item: any) => (
+                <div key={item.id} className="rounded border border-gb-border bg-gb-surface p-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate font-semibold text-gb-text">{item.title || item.url}</span>
+                    <span className="shrink-0 whitespace-nowrap text-[8px] text-gb-text-dim">
+                      {new Date(item.last_visited).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="mt-1 truncate text-gb-accent-primary">{item.url}</div>
+                </div>
+              )) : (
+                <EmptyPanelState text="No history matching query." />
+              )}
+            </div>
+          </UtilityPanel>
+        );
+
+      case 'downloads':
+        return (
+          <UtilityPanel key={panelId} title="Downloads" icon={Download} onClose={() => toggleUtilityPanel(panelId)}>
+            <input
+              type="text"
+              placeholder="Search downloads..."
+              value={downloadsSearchQuery}
+              onChange={(e) => handleDownloadsSearch(e.target.value)}
+              className="w-full rounded border border-gb-border bg-gb-bg px-2 py-1.5 text-[11px] text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+            />
+            <div className="mt-3 space-y-1.5 text-[10px]">
+              {downloads.length > 0 ? downloads.map((item: any) => (
+                <div key={item.id} className="rounded border border-gb-border bg-gb-surface p-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate font-semibold text-gb-text">{item.file_name || item.filename}</span>
+                    <span className="shrink-0 whitespace-nowrap text-[8px] text-gb-text-dim">
+                      {new Date(item.timestamp || item.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="mt-1 truncate text-gb-accent-primary">{item.url}</div>
+                </div>
+              )) : (
+                <EmptyPanelState text="No downloads matching query." />
+              )}
+            </div>
+          </UtilityPanel>
+        );
+    }
+  };
+
+  void handleAction;
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden text-sm bg-gb-bg font-sans border border-gb-border">
-      {/* Header: Browser Tabs & Controls */}
-      <header className="flex flex-col border-b border-gb-border">
-        {/* Tab Strip */}
-        <div className="flex items-center bg-gb-surface px-2 py-1 gap-1 h-10">
-          <div className="flex gap-1.5 pr-4 pl-1">
-            <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/40"></div>
-            <div className="w-3 h-3 rounded-full bg-amber-500/20 border border-amber-500/40"></div>
-            <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/40"></div>
-          </div>
-          
-          <div className="flex-1 flex items-center space-x-1 overflow-x-auto scrollbar-hide">
-            {tabs.map((tab: Tab) => (
+    <div className="flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden border border-gb-border bg-gb-bg font-sans text-sm text-gb-text">
+      <header className="flex min-w-0 shrink-0 flex-col overflow-visible border-b border-gb-border">
+        <div className="drag-region flex h-10 min-w-0 items-center gap-2 border-b border-gb-border bg-gb-surface px-2 py-1">
+          <div className="no-drag scrollbar-hide flex min-w-0 items-center gap-1 overflow-x-auto">
+            {tabs.map((tab) => (
               <div
                 key={tab.tabId}
                 onClick={() => setActiveTabId(tab.tabId)}
-                className={`
-                  group flex items-center px-4 py-1.5 rounded-t-md space-x-2 cursor-pointer transition-all border-x border-t min-w-[140px] max-w-[200px]
-                  ${activeTabId === tab.tabId 
-                    ? 'bg-gb-bg border-gb-border text-white' 
-                    : 'border-transparent text-gb-text-dim opacity-60 hover:opacity-100'}
-                `}
+                className={`group no-drag flex min-w-[160px] max-w-[240px] shrink-0 cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 transition-all ${
+                  activeTabId === tab.tabId
+                    ? 'border-gb-border bg-gb-bg text-gb-text'
+                    : 'border-transparent text-gb-text-dim opacity-80 hover:border-gb-border hover:text-gb-text hover:opacity-100'
+                }`}
               >
                 <Globe size={12} className={activeTabId === tab.tabId ? 'text-gb-accent-primary' : ''} />
-                <span className="truncate flex-1 text-[11px] font-medium">
+                <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
                   {tab.url !== 'about:blank' ? tab.url.replace('https://', '').replace('www.', '') : 'New Tab'}
                 </span>
-                <span 
-                  className="ml-2 opacity-0 group-hover:opacity-100 hover:text-white transition-opacity"
-                  onClick={(e: React.MouseEvent) => closeTab(e, tab.tabId)}
+                <button
+                  type="button"
+                  className="no-drag cursor-pointer text-gb-text-dim transition-colors hover:text-gb-text"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => closeTab(e, tab.tabId)}
+                  aria-label={`Close ${tab.title || 'tab'}`}
+                  title="Close tab"
                 >
-                  ×
-                </span>
+                  <X size={12} />
+                </button>
               </div>
             ))}
-            <button 
-              onClick={() => createTab()}
-              className="p-1 px-2 hover:bg-gb-surface-bright rounded text-gb-text-dim transition-colors"
-            >
-              +
-            </button>
           </div>
+
+          <button
+            onClick={() => createTab()}
+            className="no-drag inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gb-border bg-gb-surface-bright text-gb-text transition-colors hover:bg-gb-bg"
+            type="button"
+            aria-label="Open new tab"
+            title="New tab"
+          >
+            <Plus size={14} />
+          </button>
+
+          <div className="min-w-8 flex-1" />
         </div>
 
-        {/* Navigation & Address Bar */}
-        <div className="flex items-center gap-3 p-2 bg-gb-bg border-t border-gb-border">
-          <div className="flex gap-2 text-gb-text-dim px-1">
-            <button className="p-1 hover:text-white transition-colors"><ArrowLeft size={16} /></button>
-            <button className="p-1 hover:text-white transition-colors"><ArrowRight size={16} /></button>
-            <button className="p-1 hover:text-white transition-colors"><RotateCw size={16} /></button>
+        <div className="relative z-50 flex min-w-0 items-center gap-2 overflow-visible border-t border-gb-border bg-gb-bg p-2">
+          <div className="flex shrink-0 gap-2 px-1 text-gb-text-dim">
+            <button className="p-1 transition-colors hover:text-gb-text" title="Back"><ArrowLeft size={16} /></button>
+            <button className="p-1 transition-colors hover:text-gb-text" title="Forward"><ArrowRight size={16} /></button>
+            <button className="p-1 transition-colors hover:text-gb-text" title="Reload"><RotateCw size={16} /></button>
           </div>
-          
-          <div className="flex-1 flex items-center bg-gb-surface rounded-full border border-gb-border px-4 py-1.5 group focus-within:border-gb-accent-primary transition-colors">
-            <span className="text-xs text-gb-accent-success mr-2">🔒</span>
+
+          <div className="group flex min-w-[180px] flex-1 items-center rounded-full border border-gb-border bg-gb-surface px-4 py-1.5 transition-colors focus-within:border-gb-accent-primary">
+            <span className="mr-2 shrink-0 text-xs text-gb-accent-success">LOCKED</span>
             <input
               type="text"
               value={urlInput}
               placeholder="https://..."
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrlInput(e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && navigate()}
-              className="text-[11px] text-slate-200 flex-1 font-mono bg-transparent outline-none border-none p-0 h-4"
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && navigate()}
+              className="h-4 min-w-0 flex-1 border-none bg-transparent p-0 font-mono text-[11px] text-gb-text outline-none placeholder:text-gb-text-dim"
             />
-            {navError && <span className="text-red-400 text-[10px] ml-2 truncate max-w-[150px]" title={navError}>{navError}</span>}
-            {isNavigating && <RotateCw size={12} className="animate-spin text-gb-accent-primary ml-2" />}
+            {navError && <span className="ml-2 max-w-[150px] truncate text-[10px] text-red-400" title={navError}>{navError}</span>}
+            {isNavigating && <RotateCw size={12} className="ml-2 animate-spin text-gb-accent-primary" />}
           </div>
 
-          <div className="flex items-center gap-2 pr-1">
-            <div className="flex items-center px-2 py-1 rounded bg-gb-surface-bright border border-gb-border text-[9px] font-bold text-slate-200 focus-within:border-gb-accent-primary transition-colors">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-2 animate-pulse"></div>
-              <span className="opacity-60 mr-1">PROFILE:</span>
-              <select 
-                value={activeProfileId} 
+          <div className="flex min-w-0 shrink items-center gap-2 pr-1">
+            <div className="flex min-w-0 max-w-[210px] shrink items-center rounded border border-gb-border bg-gb-surface-bright px-2 py-1 text-[9px] font-bold text-gb-text transition-colors focus-within:border-gb-accent-primary">
+              <div className="mr-2 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-blue-500"></div>
+              <span className="mr-1 hidden shrink-0 opacity-60 lg:inline">PROFILE:</span>
+              <select
+                value={activeProfileId}
                 onChange={(e) => {
                   if (e.target.value === '__new__') {
                     createProfile();
@@ -438,242 +696,200 @@ export default function App() {
                     switchProfile(e.target.value);
                   }
                 }}
-                className="bg-transparent uppercase outline-none border-none text-slate-200 cursor-pointer appearance-none pr-3"
-                style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%228%22%20height%3D%225%22%20viewBox%3D%220%200%208%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M4%205L0%200H8L4%205Z%22%20fill%3D%22%2394A3B8%22/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center' }}
+                className="min-w-0 cursor-pointer appearance-none truncate border-none bg-transparent pr-3 uppercase text-gb-text outline-none"
+                style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%228%22%20height%3D%225%22%20viewBox%3D%220%200%208%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M4%205L0%200H8L4%205Z%22%20fill%3D%22%2364748B%22/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center' }}
               >
-                {profiles.map(p => (
-                  <option key={p.id} value={p.id} className="bg-gb-bg">{p.name || p.id}</option>
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id} className="bg-gb-bg">{profile.name || profile.id}</option>
                 ))}
                 <option value="__new__" className="bg-gb-bg text-gb-accent-success">+ NEW PROFILE</option>
               </select>
             </div>
-            <div className="flex items-center px-2 py-1 rounded bg-gb-surface-bright border border-gb-border text-[9px] font-bold text-slate-200 focus-within:border-gb-accent-primary transition-colors">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
-              <span className="opacity-60 mr-1">ENGINE:</span>
+
+            <div className="flex min-w-0 max-w-[220px] shrink items-center rounded border border-gb-border bg-gb-surface-bright px-2 py-1 text-[9px] font-bold text-gb-text transition-colors focus-within:border-gb-accent-primary">
+              <div className="mr-2 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500"></div>
+              <span className="mr-1 hidden shrink-0 opacity-60 lg:inline">ENGINE:</span>
               <select
                 value={searchEngine}
                 onChange={(e) => setSearchEngine(e.target.value as SearchEngineName)}
-                className="bg-transparent uppercase outline-none border-none text-slate-200 cursor-pointer appearance-none pr-3"
-                style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%228%22%20height%3D%225%22%20viewBox%3D%220%200%208%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M4%205L0%200H8L4%205Z%22%20fill%3D%22%2394A3B8%22/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center' }}
+                className="min-w-0 cursor-pointer appearance-none truncate border-none bg-transparent pr-3 uppercase text-gb-text outline-none"
+                style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%228%22%20height%3D%225%22%20viewBox%3D%220%200%208%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M4%205L0%200H8L4%205Z%22%20fill%3D%22%2364748B%22/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center' }}
               >
-                {SEARCH_ENGINE_OPTIONS.map(engine => (
+                {SEARCH_ENGINE_OPTIONS.map((engine) => (
                   <option key={engine} value={engine} className="bg-gb-bg">
                     {engine === 'duckduckgo' ? 'DuckDuckGo' : engine.charAt(0).toUpperCase() + engine.slice(1)}
                   </option>
                 ))}
               </select>
             </div>
-            <button 
+
+            <button
               onClick={navigate}
-              className="p-1.5 bg-gb-accent-primary hover:bg-blue-500 text-white rounded text-[11px] px-4 font-bold transition-colors"
+              className="shrink-0 rounded bg-gb-accent-primary px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-blue-500"
             >
               EXECUTE
             </button>
-          </div>
-        </div>
-      </header>
 
-      {/* Main Layout */}
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* Left Aside: Memory & History */}
-        <aside className="w-56 border-r border-gb-border bg-gb-bg flex flex-col shrink-0">
-          <div className="p-3 border-b border-gb-border">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text-dim flex items-center gap-2">
-              <Database size={10} /> Memory System
-            </span>
-            <div className="mt-2 relative">
-              <input 
-                type="text" 
-                placeholder="Search history & skills..." 
-                value={searchQuery}
-                onChange={(e) => searchMemory(e.target.value)}
-                className="w-full bg-gb-surface border border-gb-border rounded px-2 py-1 text-[10px] focus:outline-none focus:border-gb-accent-primary transition-colors text-slate-300"
-              />
+            <div>
+              <button
+                onClick={() => setSettingsOpen((open) => !open)}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded border border-gb-border transition-colors ${
+                  settingsOpen ? 'bg-gb-accent-primary text-white' : 'bg-gb-surface-bright text-gb-text hover:bg-gb-surface'
+                }`}
+                type="button"
+                aria-label="Open settings"
+                title="Settings"
+              >
+                <Settings size={15} />
+              </button>
             </div>
           </div>
-          <div className="flex-1 p-3 overflow-y-auto custom-scrollbar flex flex-col gap-5">
-            <section>
-              <span className="text-[10px] font-bold uppercase text-gb-text-dim block mb-2 px-1">Suggested Skills</span>
-              <div className="space-y-1">
-                {(suggestedSkills.length > 0 ? suggestedSkills : [
-                  { name: 'Order Lookup', match: '94%' },
-                  { name: 'Research Summary', match: '81%' }
-                ]).map((skill: any, i: number) => (
-                  <div key={i} className="p-2 rounded bg-gb-surface border border-slate-800 hover:border-gb-accent-primary cursor-pointer transition-colors group">
-                    <div className="text-[11px] font-medium group-hover:text-white">{skill.name}</div>
-                    <div className="text-[9px] text-gb-text-dim italic">Match: {skill.match || 'High Confidence'}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-            <section className="flex-1">
-              <span className="text-[10px] font-bold uppercase text-gb-text-dim block mb-2 px-1">Bookmarks Cache</span>
-              <div className="text-[10px] space-y-2 opacity-80 px-1">
-                <div className="truncate flex items-center gap-2 text-gb-text-dim hover:text-white cursor-pointer"><Box size={10} /> Fiverr Dashboard</div>
-                <div className="truncate flex items-center gap-2 text-gb-text-dim hover:text-white cursor-pointer"><Box size={10} /> Google Search</div>
-                <div className="truncate flex items-center gap-2 text-gb-text-dim hover:text-white cursor-pointer"><Box size={10} /> Playwright Docs</div>
-              </div>
-            </section>
-          </div>
-        </aside>
+        </div>
 
-        {/* Center: Live Browser View */}
-        <main className="flex-1 bg-[#0a0a0c] flex flex-col overflow-hidden relative glass-box-grid p-4">
-          <div 
-             ref={browserViewRef}
-             className="flex-1 w-full bg-black rounded-lg shadow-2xl relative border border-gb-border overflow-hidden"
-          >
-            {!activeTabId && (
-              <div className="flex flex-col items-center justify-center h-full">
+        {settingsOpen && (
+          <div className="no-drag border-t border-gb-border bg-gb-surface px-3 py-3 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gb-text-dim">Settings</span>
+              <div className="flex items-center gap-3">
+                {enabledPanels.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setEnabledPanels([])}
+                    className="text-[10px] font-medium text-gb-text-dim hover:text-gb-text"
+                  >
+                    Hide all
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(false)}
+                  className="rounded p-1 text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text"
+                  aria-label="Close settings"
+                  title="Close settings"
+                >
+                  <X size={13} />
+                </button>
               </div>
-            )}
-            
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
+              <div>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gb-text-dim">Theme</div>
+                <div className="grid grid-cols-3 gap-1 rounded-md border border-gb-border bg-gb-bg p-1">
+                  {themeOptions.map((option) => {
+                    const Icon = option.icon;
+                    const isActive = themePreference === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setThemePreference(option.value)}
+                        className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-[10px] font-semibold transition-colors ${
+                          isActive ? 'bg-gb-accent-primary text-white' : 'text-gb-text-dim hover:bg-gb-surface-bright hover:text-gb-text'
+                        }`}
+                      >
+                        <Icon size={12} />
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gb-text-dim">Utility Panels</div>
+                <div className="grid max-h-[220px] gap-1 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+                  {utilityPanelConfigs.map((panel) => {
+                    const Icon = panel.icon;
+                    const enabled = enabledPanels.includes(panel.id);
+
+                    return (
+                      <button
+                        key={panel.id}
+                        type="button"
+                        onClick={() => toggleUtilityPanel(panel.id)}
+                        className={`flex min-w-0 items-start gap-2 rounded border p-2 text-left transition-colors ${
+                          enabled
+                            ? 'border-gb-accent-primary bg-gb-accent-primary/10'
+                            : 'border-gb-border bg-gb-bg hover:bg-gb-surface-bright'
+                        }`}
+                      >
+                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                          enabled ? 'border-gb-accent-primary bg-gb-accent-primary text-white' : 'border-gb-border text-gb-text-dim'
+                        }`}>
+                          {enabled ? <Check size={12} /> : <Icon size={12} />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[11px] font-semibold text-gb-text">{panel.label}</span>
+                          <span className="block truncate text-[10px] text-gb-text-dim">{panel.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </header>
+
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-black">
+          <div
+            ref={browserViewRef}
+            className="relative flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden bg-black"
+          >
+            {!activeTabId && <div className="flex h-full items-center justify-center"></div>}
             {activeTabId && (
-              <div className="absolute top-2 right-2 z-50 flex items-center gap-2 pointer-events-none">
-                <span className="text-[8px] bg-emerald-500/80 text-white px-1.5 py-0.5 rounded font-bold shadow-lg animate-pulse">LIVE VIEW</span>
+              <div className="pointer-events-none absolute right-2 top-2 z-50 flex items-center gap-2">
+                <span className="rounded bg-emerald-500/80 px-1.5 py-0.5 text-[8px] font-bold text-white shadow-lg">LIVE VIEW</span>
               </div>
             )}
           </div>
         </main>
-
-        {/* Right Aside: Inspection & Logs */}
-        <aside className="w-80 border-l border-gb-border bg-gb-bg flex flex-col shrink-0 overflow-y-auto custom-scrollbar">
-          {/* DOM Snapshot Panel */}
-          <div className="h-[250px] shrink-0 border-b border-gb-border flex flex-col">
-            <div className="p-2 border-b border-gb-border flex justify-between items-center bg-gb-surface">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text flex items-center gap-2">
-                <Terminal size={10} className="text-gb-accent-primary" /> DOM Snapshot
-              </span>
-              <span className="text-[8px] px-1 bg-gb-accent-success/20 text-gb-accent-success border border-gb-accent-success/30 rounded font-bold">LIVE</span>
-            </div>
-            <div className="flex-1 p-2 overflow-y-auto custom-scrollbar font-mono text-[9px] space-y-1.5">
-              {domSnapshot.length > 0 ? domSnapshot.slice(0, 50).map((el: DomElement, i: number) => (
-                <div key={i} className="group cursor-pointer hover:bg-gb-surface-bright p-1 rounded transition-colors">
-                  <div className="text-blue-400">&lt;{el.tag} {el.role && `role="${el.role}"`}&gt;</div>
-                  <div className="pl-3 text-slate-500 opacity-60">• selector: {el.id ? `#${el.id}` : (el.selector || el.tag)}</div>
-                  <div className="pl-3 text-emerald-500/80 italic opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                    <Activity size={8} /> // Click action available
-                  </div>
-                </div>
-              )) : (
-                <div className="h-full flex items-center justify-center text-gb-text-dim italic opacity-50 text-[9px]">
-                  No elements scanned...
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Action Logs Panel */}
-          <div className="h-[250px] shrink-0 border-b border-gb-border flex flex-col">
-            <div className="p-2 border-b border-gb-border bg-gb-surface">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text flex items-center gap-2">
-                <Activity size={10} className="text-gb-accent-primary" /> Action Logs
-              </span>
-            </div>
-            <div className="flex-1 p-3 overflow-y-auto custom-scrollbar font-mono text-[9px] space-y-3">
-              {logs.map((log: ActionLog) => (
-                <div key={log.id} className={`border-l-2 pl-2 flex flex-col gap-1 transition-all ${log.success ? 'border-gb-accent-success' : 'border-red-500'}`}>
-                  <div className="text-white flex justify-between items-center">
-                    <span className="font-bold flex items-center gap-1">
-                      {log.action_type.toUpperCase()} 
-                      {log.success && <span className="text-[8px] text-gb-accent-success">[VERIFIED]</span>}
-                    </span>
-                    <span className="text-gb-text-dim text-[8px]">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                  <div className="text-gb-text-dim text-[8px] truncate opacity-80 italic">Intent: {log.intent}</div>
-                  <div className="flex flex-col gap-0.5 mt-1 opacity-60">
-                    <div className="flex justify-between"><span>PRE_HASH:</span> <span className="text-blue-400">{log.before_dom_hash?.substring(0, 8)}</span></div>
-                    <div className="flex justify-between"><span>POST_HASH:</span> <span className="text-blue-400">{log.after_dom_hash?.substring(0, 8)}</span></div>
-                  </div>
-                  {log.reason && <div className="text-red-400 text-[8px] mt-1">{log.reason}</div>}
-                </div>
-              ))}
-              {logs.length === 0 && (
-                <div className="h-full flex items-center justify-center text-gb-text-dim italic opacity-50 text-[9px]">
-                  Log cache empty...
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Browser History Panel */}
-          <div className="h-[250px] shrink-0 border-b border-gb-border flex flex-col">
-            <div className="p-2 border-b border-gb-border bg-gb-surface flex flex-col gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text flex items-center gap-2">
-                <History size={10} className="text-gb-accent-primary" /> Browser History
-              </span>
-              <input 
-                type="text" 
-                placeholder="Search history..." 
-                value={historySearchQuery}
-                onChange={(e) => handleHistorySearch(e.target.value)}
-                className="w-full bg-gb-bg border border-gb-border rounded px-2 py-1 text-[9px] focus:outline-none focus:border-gb-accent-primary transition-colors text-slate-300"
-              />
-            </div>
-            <div className="flex-1 p-2 overflow-y-auto custom-scrollbar flex flex-col text-[10px]">
-              {history.length > 0 ? history.map((item: any) => (
-                <div key={item.id} className="group cursor-pointer hover:bg-gb-surface-bright p-1.5 rounded transition-colors flex flex-col border-b border-gb-border/50 last:border-0">
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="font-medium text-slate-200 truncate flex-1">{item.title || item.url}</span>
-                    <span className="text-[8px] text-gb-text-dim whitespace-nowrap">{new Date(item.last_visited).toLocaleDateString()} {new Date(item.last_visited).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                  </div>
-                  <div className="text-blue-400/80 truncate mt-0.5 text-[9px]">{item.url}</div>
-                </div>
-              )) : (
-                <div className="h-full flex items-center justify-center text-gb-text-dim italic opacity-50 text-[9px]">
-                  No history matching query...
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Downloads Panel */}
-          <div className="h-[250px] shrink-0 flex flex-col">
-            <div className="p-2 border-b border-gb-border bg-gb-surface flex flex-col gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text flex items-center gap-2">
-                <Download size={10} className="text-gb-accent-primary" /> Downloads
-              </span>
-              <input 
-                type="text" 
-                placeholder="Search downloads..." 
-                value={downloadsSearchQuery}
-                onChange={(e) => handleDownloadsSearch(e.target.value)}
-                className="w-full bg-gb-bg border border-gb-border rounded px-2 py-1 text-[9px] focus:outline-none focus:border-gb-accent-primary transition-colors text-slate-300"
-              />
-            </div>
-            <div className="flex-1 p-2 overflow-y-auto custom-scrollbar flex flex-col text-[10px]">
-              {downloads.length > 0 ? downloads.map((item: any) => (
-                <div key={item.id} className="group cursor-pointer hover:bg-gb-surface-bright p-1.5 rounded transition-colors flex flex-col border-b border-gb-border/50 last:border-0">
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="font-medium text-slate-200 truncate flex-1">{item.file_name || item.filename}</span>
-                    <span className="text-[8px] text-gb-text-dim whitespace-nowrap">{new Date(item.timestamp || item.created_at).toLocaleDateString()} {new Date(item.timestamp || item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                  </div>
-                  <div className="text-blue-400/80 truncate mt-0.5 text-[9px]">{item.url}</div>
-                </div>
-              )) : (
-                <div className="h-full flex items-center justify-center text-gb-text-dim italic opacity-50 text-[9px]">
-                  No downloads matching query...
-                </div>
-              )}
-            </div>
-          </div>
-        </aside>
       </div>
+    </div>
+  );
+}
 
-      {/* Footer: Status Bar */}
-      <footer className="h-7 bg-gb-surface border-t border-gb-border px-3 flex items-center justify-between text-[10px] font-medium shrink-0">
-        <div className="flex gap-5 text-gb-text-dim">
-          <span className="flex items-center gap-1.5">DB: <span className="text-slate-300">glassbox.sqlite</span></span>
-          <span className="flex items-center gap-1.5">TAB_ID: <span className="text-slate-300 truncate max-w-[80px]">{activeTabId || 'NONE'}</span></span>
-          <span className="flex items-center gap-1.5">SESSIONS: <span className="text-slate-300 font-bold">{tabs.length} Active</span></span>
-        </div>
-        <div className="flex items-center gap-5">
-          <span className="flex items-center gap-1.5 text-gb-text-dim">
-            API SERVER: <span className="text-gb-accent-success flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-gb-accent-success"></div> ONLINE</span>
-          </span>
-          <span className="px-1.5 py-0.5 bg-gb-accent-primary/20 text-gb-accent-primary border border-gb-accent-primary/30 rounded text-[9px] font-bold">v1.2.0-MVP</span>
-        </div>
-      </footer>
+function UtilityPanel({
+  title,
+  icon: Icon,
+  onClose,
+  children,
+}: {
+  title: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-md border border-gb-border bg-gb-surface">
+      <div className="flex items-center justify-between border-b border-gb-border px-3 py-2">
+        <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gb-text">
+          <Icon size={11} className="text-gb-accent-primary" />
+          {title}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded p-1 text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text"
+          aria-label={`Close ${title}`}
+          title="Close panel"
+        >
+          <X size={12} />
+        </button>
+      </div>
+      <div className="p-3">{children}</div>
+    </section>
+  );
+}
+
+function EmptyPanelState({ text }: { text: string }) {
+  return (
+    <div className="flex min-h-16 items-center justify-center rounded border border-dashed border-gb-border px-3 py-4 text-center text-[10px] italic text-gb-text-dim">
+      {text}
     </div>
   );
 }
