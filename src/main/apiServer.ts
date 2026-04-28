@@ -61,7 +61,8 @@ export function startApiServer(port: number = 3000): Promise<void> {
 
     app.post('/api/tabs', (req, res) => {
       const profileId = typeof req.body?.profileId === 'string' ? req.body.profileId : 'default';
-      const id = tabManager.createTabSync(profileId);
+      const initialUrl = typeof req.body?.initialUrl === 'string' ? req.body.initialUrl : undefined;
+      const id = tabManager.createTabSync(profileId, initialUrl);
       res.json({ id });
     });
 

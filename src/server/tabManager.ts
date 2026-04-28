@@ -4,6 +4,7 @@ import { join } from 'path';
 import { createRequire } from 'module';
 
 const require = createRequire(typeof __filename === 'string' ? __filename : `${process.cwd()}\\src\\server\\tabManager.ts`);
+const DEFAULT_LANDING_URL = 'https://bing.com';
 
 // Defensive Electron import for Node/Vite preview
 let app: any, BrowserView: any, session: any;
@@ -59,10 +60,11 @@ class TabManager {
     return this.activeTabId;
   }
 
-  createTabSync(profileId: string = 'default'): string {
+  createTabSync(profileId: string = 'default', initialUrl: string = DEFAULT_LANDING_URL): string {
     const id = uuidv4();
     const partition = `persist:gb_profile_${profileId}`;
     const sess = session.fromPartition(partition);
+    const startUrl = initialUrl.trim() || DEFAULT_LANDING_URL;
 
     const view = new BrowserView({
       webPreferences: {
@@ -77,8 +79,8 @@ class TabManager {
       id,
       profileId,
       view,
-      url: 'about:blank',
-      title: 'New Tab',
+      url: startUrl,
+      title: startUrl === DEFAULT_LANDING_URL ? 'Bing' : 'New Tab',
       domHash: '',
       elements: []
     };
@@ -111,6 +113,10 @@ class TabManager {
       tab.url = url;
       this.syncHistory(profileId, url, tab.title);
       db.prepare('UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(url, id);
+    });
+
+    void view.webContents.loadURL(startUrl).catch((error: any) => {
+      console.warn('Default tab load failed:', error?.message || error);
     });
 
     return id;
