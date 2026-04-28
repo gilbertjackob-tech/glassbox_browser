@@ -29,6 +29,11 @@ interface Tab {
   title: string;
 }
 
+interface Profile {
+  id: string;
+  name: string;
+}
+
 interface DomElement {
   tag: string;
   text?: string;
@@ -47,6 +52,16 @@ interface ActionLog {
   reason?: string;
   before_dom_hash?: string;
   after_dom_hash?: string;
+}
+
+interface SavedPassword {
+  id: string;
+  profile_id: string;
+  origin: string;
+  username: string;
+  password: string;
+  created_at: string;
+  updated_at: string;
 }
 
 type ThemePreference = 'system' | 'light' | 'dark';
@@ -98,7 +113,7 @@ function getInitialUtilityPanels(): UtilityPanelId[] {
 }
 
 export default function App() {
-  const [profiles, setProfiles] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string>('default');
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -107,6 +122,7 @@ export default function App() {
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [downloads, setDownloads] = useState<any[]>([]);
+  const [passwords, setPasswords] = useState<SavedPassword[]>([]);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [downloadsSearchQuery, setDownloadsSearchQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,6 +134,8 @@ export default function App() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [enabledPanels, setEnabledPanels] = useState<UtilityPanelId[]>(getInitialUtilityPanels);
+  const [newProfileName, setNewProfileName] = useState('');
+  const [passwordForm, setPasswordForm] = useState({ origin: '', username: '', password: '' });
   const browserViewRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
 
@@ -186,18 +204,21 @@ export default function App() {
       hasInitializedRef.current = true;
 
       try {
+        const initialSettings = await fetchAppSettings();
+        const initialProfileId = initialSettings.activeProfileId || 'default';
+        setActiveProfileId(initialProfileId);
         await fetchProfiles();
-        const initialTabs = await fetchTabs(activeProfileId);
+        const initialTabs = await fetchTabs(initialProfileId);
         if (initialTabs.length === 0) {
-          await createTab();
+          await createTab(undefined, initialProfileId);
         }
+        await fetchLogs(initialProfileId);
+        await fetchHistory('', initialProfileId);
+        await fetchDownloads('', initialProfileId);
+        await fetchPasswords(initialProfileId);
       } catch {
         // ignore init failures
       }
-
-      await fetchLogs();
-      await fetchHistory();
-      await fetchDownloads();
     };
 
     init();
@@ -220,6 +241,19 @@ export default function App() {
     requestAnimationFrame(() => syncBrowserViewBounds(activeTabId));
     updateActiveTabData(activeTabId);
   }, [activeTabId]);
+
+  const fetchAppSettings = async () => {
+    const res = await fetch('/api/settings');
+    return await res.json();
+  };
+
+  const persistActiveProfile = async (profileId: string) => {
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activeProfileId: profileId }),
+    });
+  };
 
   const fetchProfiles = async () => {
     try {
@@ -251,8 +285,8 @@ export default function App() {
     }
   };
 
-  const createProfile = async () => {
-    const name = prompt('Enter new profile name:');
+  const createProfile = async (nameOverride?: string) => {
+    const name = (nameOverride ?? prompt('Enter new profile name:') ?? '').trim();
     if (!name) return;
 
     const res = await fetch('/api/profiles', {
@@ -263,12 +297,42 @@ export default function App() {
 
     const newProfile = await res.json();
     await fetchProfiles();
+    setNewProfileName('');
     await switchProfile(newProfile.id);
   };
 
+  const renameProfile = async (profileId: string) => {
+    const currentProfile = profiles.find((profile) => profile.id === profileId);
+    const nextName = (prompt('Rename profile:', currentProfile?.name || '') ?? '').trim();
+    if (!nextName) return;
+
+    await fetch(`/api/profiles/${profileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nextName }),
+    });
+
+    await fetchProfiles();
+  };
+
+  const deleteProfile = async (profileId: string) => {
+    if (profileId === 'default') return;
+    if (!confirm('Delete this profile and its local data?')) return;
+
+    const res = await fetch(`/api/profiles/${profileId}`, { method: 'DELETE' });
+    const data = await res.json();
+    await fetchProfiles();
+    await switchProfile(data.activeProfileId || 'default');
+  };
+
   const switchProfile = async (profileId: string) => {
+    await persistActiveProfile(profileId);
     setActiveProfileId(profileId);
     const filteredData = await fetchTabs(profileId);
+    await fetchLogs(profileId);
+    await fetchHistory('', profileId);
+    await fetchDownloads('', profileId);
+    await fetchPasswords(profileId);
 
     if (filteredData.length === 0) {
       await createTab(undefined, profileId);
@@ -280,18 +344,20 @@ export default function App() {
     requestAnimationFrame(() => syncBrowserViewBounds(nextActiveTabId));
   };
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (profileId: string = activeProfileId) => {
     try {
-      const res = await fetch('/api/memory/logs');
+      const res = await fetch(`/api/memory/logs?profileId=${encodeURIComponent(profileId)}`);
       setLogs(await res.json());
     } catch {
       // ignore
     }
   };
 
-  const fetchHistory = async (q: string = '') => {
+  const fetchHistory = async (q: string = '', profileId: string = activeProfileId) => {
     try {
-      const queryStr = q ? `?q=${encodeURIComponent(q)}` : '';
+      const params = new URLSearchParams({ profileId });
+      if (q) params.set('q', q);
+      const queryStr = `?${params.toString()}`;
       const res = await fetch(`/api/memory/history${queryStr}`);
       setHistory(await res.json());
     } catch {
@@ -299,11 +365,22 @@ export default function App() {
     }
   };
 
-  const fetchDownloads = async (q: string = '') => {
+  const fetchDownloads = async (q: string = '', profileId: string = activeProfileId) => {
     try {
-      const queryStr = q ? `?q=${encodeURIComponent(q)}` : '';
+      const params = new URLSearchParams({ profileId });
+      if (q) params.set('q', q);
+      const queryStr = `?${params.toString()}`;
       const res = await fetch(`/api/memory/downloads${queryStr}`);
       setDownloads(await res.json());
+    } catch {
+      // ignore
+    }
+  };
+
+  const fetchPasswords = async (profileId: string = activeProfileId) => {
+    try {
+      const res = await fetch(`/api/passwords?profileId=${encodeURIComponent(profileId)}`);
+      setPasswords(await res.json());
     } catch {
       // ignore
     }
@@ -316,7 +393,7 @@ export default function App() {
       return;
     }
 
-    const res = await fetch(`/api/memory/search?q=${encodeURIComponent(q)}`);
+    const res = await fetch(`/api/memory/search?q=${encodeURIComponent(q)}&profileId=${encodeURIComponent(activeProfileId)}`);
     setSearchResults(await res.json());
   };
 
@@ -328,6 +405,39 @@ export default function App() {
   const handleDownloadsSearch = (q: string) => {
     setDownloadsSearchQuery(q);
     fetchDownloads(q);
+  };
+
+  const clearHistory = async () => {
+    await fetch(`/api/memory/history?profileId=${encodeURIComponent(activeProfileId)}`, { method: 'DELETE' });
+    await fetchHistory('', activeProfileId);
+  };
+
+  const clearDownloads = async () => {
+    await fetch(`/api/memory/downloads?profileId=${encodeURIComponent(activeProfileId)}`, { method: 'DELETE' });
+    await fetchDownloads('', activeProfileId);
+  };
+
+  const savePassword = async () => {
+    if (!passwordForm.origin.trim() || !passwordForm.username.trim() || !passwordForm.password) return;
+
+    await fetch('/api/passwords', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profileId: activeProfileId,
+        origin: passwordForm.origin.trim(),
+        username: passwordForm.username.trim(),
+        password: passwordForm.password,
+      }),
+    });
+
+    setPasswordForm({ origin: '', username: '', password: '' });
+    await fetchPasswords(activeProfileId);
+  };
+
+  const deletePassword = async (passwordId: string) => {
+    await fetch(`/api/passwords/${passwordId}`, { method: 'DELETE' });
+    await fetchPasswords(activeProfileId);
   };
 
   const updateActiveTabData = async (specificTabId?: string) => {
@@ -373,7 +483,7 @@ export default function App() {
       setDomSnapshot([]);
     }
 
-    await fetchLogs();
+    await fetchLogs(activeProfileId);
   };
 
   const executeNavigate = async (tabIdToUse: string, url: string) => {
@@ -453,7 +563,7 @@ export default function App() {
     });
 
     updateActiveTabData();
-    fetchLogs();
+    fetchLogs(activeProfileId);
   };
 
   const toggleUtilityPanel = (panelId: UtilityPanelId) => {
@@ -771,7 +881,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
+            <div className="grid gap-3 xl:grid-cols-[260px_320px_1fr]">
               <div>
                 <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gb-text-dim">Theme</div>
                 <div className="grid grid-cols-3 gap-1 rounded-md border border-gb-border bg-gb-bg p-1">
@@ -793,6 +903,66 @@ export default function App() {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text-dim">Profiles</span>
+                  <span className="text-[10px] text-gb-text-dim">Active: {profiles.find((profile) => profile.id === activeProfileId)?.name || activeProfileId}</span>
+                </div>
+                <div className="rounded-md border border-gb-border bg-gb-bg p-2">
+                  <div className="mb-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={newProfileName}
+                      onChange={(e) => setNewProfileName(e.target.value)}
+                      placeholder="New profile name"
+                      className="min-w-0 flex-1 rounded border border-gb-border bg-gb-surface px-2 py-1.5 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => createProfile(newProfileName)}
+                      className="shrink-0 rounded bg-gb-accent-primary px-3 py-1.5 text-[10px] font-semibold text-white"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1">
+                    {profiles.map((profile) => (
+                      <div key={profile.id} className="flex items-center gap-2 rounded border border-gb-border bg-gb-surface p-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[11px] font-semibold text-gb-text">{profile.name}</div>
+                          <div className="truncate text-[10px] text-gb-text-dim">{profile.id === 'default' ? 'Default local profile' : profile.id}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => switchProfile(profile.id)}
+                          className={`rounded px-2 py-1 text-[10px] font-semibold ${
+                            profile.id === activeProfileId ? 'bg-gb-accent-primary text-white' : 'bg-gb-surface-bright text-gb-text'
+                          }`}
+                        >
+                          {profile.id === activeProfileId ? 'Active' : 'Use'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => renameProfile(profile.id)}
+                          className="rounded bg-gb-surface-bright px-2 py-1 text-[10px] font-semibold text-gb-text"
+                        >
+                          Rename
+                        </button>
+                        {profile.id !== 'default' && (
+                          <button
+                            type="button"
+                            onClick={() => deleteProfile(profile.id)}
+                            className="rounded bg-red-500/15 px-2 py-1 text-[10px] font-semibold text-red-400"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -829,6 +999,116 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_1fr_1.2fr]">
+              <section className="rounded-md border border-gb-border bg-gb-bg p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text-dim">History</span>
+                  <button
+                    type="button"
+                    onClick={clearHistory}
+                    className="rounded bg-gb-surface-bright px-2 py-1 text-[10px] font-semibold text-gb-text"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="mb-2 text-[10px] text-gb-text-dim">{history.length} entries in this profile.</div>
+                <div className="space-y-1">
+                  {history.slice(0, 4).map((item: any) => (
+                    <div key={item.id} className="rounded border border-gb-border bg-gb-surface p-2">
+                      <div className="truncate text-[11px] font-semibold text-gb-text">{item.title || item.url}</div>
+                      <div className="mt-1 truncate text-[10px] text-gb-text-dim">{item.url}</div>
+                    </div>
+                  ))}
+                  {history.length === 0 && <EmptyPanelState text="No local history for this profile." />}
+                </div>
+              </section>
+
+              <section className="rounded-md border border-gb-border bg-gb-bg p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gb-text-dim">Downloads</span>
+                  <button
+                    type="button"
+                    onClick={clearDownloads}
+                    className="rounded bg-gb-surface-bright px-2 py-1 text-[10px] font-semibold text-gb-text"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="mb-2 text-[10px] text-gb-text-dim">{downloads.length} entries in this profile.</div>
+                <div className="space-y-1">
+                  {downloads.slice(0, 4).map((item: any) => (
+                    <div key={item.id} className="rounded border border-gb-border bg-gb-surface p-2">
+                      <div className="truncate text-[11px] font-semibold text-gb-text">{item.file_name || item.filename}</div>
+                      <div className="mt-1 truncate text-[10px] text-gb-text-dim">{item.url}</div>
+                    </div>
+                  ))}
+                  {downloads.length === 0 && <EmptyPanelState text="No local downloads for this profile." />}
+                </div>
+              </section>
+
+              <section className="rounded-md border border-gb-border bg-gb-bg p-3">
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gb-text-dim">Password Manager</div>
+                <div className="mb-2 grid gap-2 md:grid-cols-3">
+                  <input
+                    type="text"
+                    value={passwordForm.origin}
+                    onChange={(e) => setPasswordForm((current) => ({ ...current, origin: e.target.value }))}
+                    placeholder="Site origin"
+                    className="rounded border border-gb-border bg-gb-surface px-2 py-1.5 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
+                  />
+                  <input
+                    type="text"
+                    value={passwordForm.username}
+                    onChange={(e) => setPasswordForm((current) => ({ ...current, username: e.target.value }))}
+                    placeholder="Username"
+                    className="rounded border border-gb-border bg-gb-surface px-2 py-1.5 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
+                  />
+                  <input
+                    type="password"
+                    value={passwordForm.password}
+                    onChange={(e) => setPasswordForm((current) => ({ ...current, password: e.target.value }))}
+                    placeholder="Password"
+                    className="rounded border border-gb-border bg-gb-surface px-2 py-1.5 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
+                  />
+                </div>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[10px] text-gb-text-dim">Stored locally in SQLite for this profile.</span>
+                  <button
+                    type="button"
+                    onClick={savePassword}
+                    className="rounded bg-gb-accent-primary px-3 py-1.5 text-[10px] font-semibold text-white"
+                  >
+                    Save Credential
+                  </button>
+                </div>
+                <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1">
+                  {passwords.map((entry) => (
+                    <div key={entry.id} className="flex items-center gap-2 rounded border border-gb-border bg-gb-surface p-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[11px] font-semibold text-gb-text">{entry.origin}</div>
+                        <div className="truncate text-[10px] text-gb-text-dim">{entry.username}</div>
+                      </div>
+                      <div className="max-w-[120px] truncate text-[10px] text-gb-text-dim">••••••••</div>
+                      <button
+                        type="button"
+                        onClick={() => deletePassword(entry.id)}
+                        className="rounded bg-red-500/15 px-2 py-1 text-[10px] font-semibold text-red-400"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  {passwords.length === 0 && <EmptyPanelState text="No saved credentials for this profile." />}
+                </div>
+              </section>
+            </div>
+
+            {enabledPanels.length > 0 && (
+              <div className="mt-3 grid gap-3 xl:grid-cols-3">
+                {enabledPanels.map(renderUtilityPanel)}
+              </div>
+            )}
           </div>
         )}
       </header>

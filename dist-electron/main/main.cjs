@@ -25081,6 +25081,12 @@ function initDb() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS tabs (
       id TEXT PRIMARY KEY,
       profile_id TEXT,
@@ -25106,6 +25112,17 @@ function initDb() {
       filename TEXT,
       path TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_passwords (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      username TEXT NOT NULL,
+      password TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(profile_id, origin, username)
     );
 
     CREATE TABLE IF NOT EXISTS actions (
@@ -25155,6 +25172,10 @@ function initDb() {
   const defaultProfile = db.prepare("SELECT id FROM profiles WHERE id = ?").get("default");
   if (!defaultProfile) {
     db.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run("default", "Default", "persist:profile-default");
+  }
+  const activeProfileSetting = db.prepare("SELECT key FROM app_settings WHERE key = ?").get("active_profile_id");
+  if (!activeProfileSetting) {
+    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("active_profile_id", "default");
   }
 }
 initDb();
@@ -25666,6 +25687,22 @@ var downloadUrlColumn = downloadColumns.includes("url") ? "url" : null;
 var downloadTimestampColumn = downloadColumns.includes("timestamp") ? "timestamp" : downloadColumns.includes("created_at") ? "created_at" : null;
 var actionsColumns = getTableColumns("actions");
 var actionLogsColumns = getTableColumns("action_logs");
+function getSettingValue(key, fallback) {
+  const row = memoryDb_default.prepare("SELECT value FROM app_settings WHERE key = ?").get(key);
+  return row?.value || fallback;
+}
+function setSettingValue(key, value) {
+  memoryDb_default.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(key, value);
+}
+function resolveProfileId(profileId) {
+  return typeof profileId === "string" && profileId.trim().length > 0 ? profileId : getSettingValue("active_profile_id", "default");
+}
 var serverPromise = null;
 function startApiServer(port = 3e3) {
   if (serverPromise) {
@@ -25678,6 +25715,21 @@ function startApiServer(port = 3e3) {
     app3.get("/api/profiles", (_req, res) => {
       res.json(memoryDb_default.prepare("SELECT * FROM profiles ORDER BY created_at ASC").all());
     });
+    app3.get("/api/settings", (_req, res) => {
+      res.json({
+        activeProfileId: getSettingValue("active_profile_id", "default")
+      });
+    });
+    app3.put("/api/settings", (req, res) => {
+      const activeProfileId = resolveProfileId(req.body?.activeProfileId);
+      const profile = memoryDb_default.prepare("SELECT id FROM profiles WHERE id = ?").get(activeProfileId);
+      if (!profile) {
+        res.status(400).json({ error: "Profile not found" });
+        return;
+      }
+      setSettingValue("active_profile_id", activeProfileId);
+      res.json({ success: true, activeProfileId });
+    });
     app3.post("/api/profiles", (req, res) => {
       const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
       if (!name) {
@@ -25687,6 +25739,49 @@ function startApiServer(port = 3e3) {
       const id = v4_default();
       memoryDb_default.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run(id, name, `persist:profile-${id}`);
       res.json({ id, name });
+    });
+    app3.patch("/api/profiles/:id", (req, res) => {
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      if (!name) {
+        res.status(400).json({ error: "Name is required" });
+        return;
+      }
+      const profile = memoryDb_default.prepare("SELECT id FROM profiles WHERE id = ?").get(req.params.id);
+      if (!profile) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      memoryDb_default.prepare("UPDATE profiles SET name = ? WHERE id = ?").run(name, req.params.id);
+      res.json({ success: true, id: req.params.id, name });
+    });
+    app3.delete("/api/profiles/:id", async (req, res) => {
+      const profileId = req.params.id;
+      if (profileId === "default") {
+        res.status(400).json({ error: "Default profile cannot be deleted" });
+        return;
+      }
+      const profile = memoryDb_default.prepare("SELECT id FROM profiles WHERE id = ?").get(profileId);
+      if (!profile) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      const tabs = tabManager.getAllTabs().filter((tab) => tab.profileId === profileId);
+      for (const tab of tabs) {
+        await tabManager.closeTab(tab.tabId);
+      }
+      memoryDb_default.prepare("DELETE FROM profiles WHERE id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM tabs WHERE profile_id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM history WHERE profile_id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM downloads WHERE profile_id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM actions WHERE profile_id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM tasks WHERE profile_id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM skills WHERE profile_id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM dom_snapshots WHERE profile_id = ?").run(profileId);
+      memoryDb_default.prepare("DELETE FROM saved_passwords WHERE profile_id = ?").run(profileId);
+      if (getSettingValue("active_profile_id", "default") === profileId) {
+        setSettingValue("active_profile_id", "default");
+      }
+      res.json({ success: true, activeProfileId: getSettingValue("active_profile_id", "default") });
     });
     app3.get("/api/tabs", (_req, res) => {
       res.json(tabManager.getAllTabs());
@@ -25715,38 +25810,51 @@ function startApiServer(port = 3e3) {
     });
     app3.get("/api/memory/search", async (req, res) => {
       const query = typeof req.query.q === "string" ? req.query.q : "";
-      const profileId = typeof req.query.profileId === "string" ? req.query.profileId : "default";
+      const profileId = resolveProfileId(req.query.profileId);
       const results = await memoryService.searchMemory(query, profileId);
       res.json(results);
     });
     app3.get("/api/memory/history", (req, res) => {
       const query = typeof req.query.q === "string" ? req.query.q : "";
-      let sql = "SELECT * FROM history";
-      const params = [];
+      const profileId = resolveProfileId(req.query.profileId);
+      let sql = "SELECT * FROM history WHERE profile_id = ?";
+      const params = [profileId];
       if (query) {
-        sql += " WHERE url LIKE ? OR title LIKE ?";
+        sql += " AND (url LIKE ? OR title LIKE ?)";
         params.push(`%${query}%`, `%${query}%`);
       }
       sql += " ORDER BY last_visited DESC LIMIT 50";
       res.json(memoryDb_default.prepare(sql).all(...params));
     });
+    app3.delete("/api/memory/history", (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
+      memoryDb_default.prepare("DELETE FROM history WHERE profile_id = ?").run(profileId);
+      res.json({ success: true });
+    });
     app3.get("/api/memory/downloads", (req, res) => {
       const query = typeof req.query.q === "string" ? req.query.q : "";
-      let sql = "SELECT * FROM downloads";
-      const params = [];
+      const profileId = resolveProfileId(req.query.profileId);
+      let sql = "SELECT * FROM downloads WHERE profile_id = ?";
+      const params = [profileId];
       if (query) {
         const clauses = [];
         if (downloadFileNameColumn) clauses.push(`${downloadFileNameColumn} LIKE ?`);
         if (downloadUrlColumn) clauses.push(`${downloadUrlColumn} LIKE ?`);
         if (clauses.length > 0) {
-          sql += ` WHERE (${clauses.join(" OR ")})`;
+          sql += ` AND (${clauses.join(" OR ")})`;
           params.push(...clauses.map(() => `%${query}%`));
         }
       }
       sql += ` ORDER BY ${downloadTimestampColumn || "rowid"} DESC LIMIT 50`;
       res.json(memoryDb_default.prepare(sql).all(...params));
     });
-    app3.get("/api/memory/logs", (_req, res) => {
+    app3.delete("/api/memory/downloads", (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
+      memoryDb_default.prepare("DELETE FROM downloads WHERE profile_id = ?").run(profileId);
+      res.json({ success: true });
+    });
+    app3.get("/api/memory/logs", (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
       if (actionsColumns.length > 0) {
         const intentExpr = actionsColumns.includes("intent") ? "COALESCE(intent, '') AS intent" : "'' AS intent";
         const successExpr = actionsColumns.includes("success") ? "COALESCE(success, 0) AS success" : "0 AS success";
@@ -25763,17 +25871,51 @@ function startApiServer(port = 3e3) {
             NULL AS before_dom_hash,
             NULL AS after_dom_hash
           FROM actions
+          WHERE profile_id = ?
           ORDER BY ${actionsColumns.includes("created_at") ? "created_at" : "id"} DESC
           LIMIT 50
-        `).all();
+        `).all(profileId);
         res.json(logs);
         return;
       }
       if (actionLogsColumns.length > 0) {
-        res.json(memoryDb_default.prepare("SELECT * FROM action_logs ORDER BY timestamp DESC LIMIT 50").all());
+        res.json(memoryDb_default.prepare("SELECT * FROM action_logs WHERE profile_id = ? ORDER BY timestamp DESC LIMIT 50").all(profileId));
         return;
       }
       res.json([]);
+    });
+    app3.get("/api/passwords", (req, res) => {
+      const profileId = resolveProfileId(req.query.profileId);
+      const passwords = memoryDb_default.prepare(`
+        SELECT id, profile_id, origin, username, password, created_at, updated_at
+        FROM saved_passwords
+        WHERE profile_id = ?
+        ORDER BY updated_at DESC, created_at DESC
+      `).all(profileId);
+      res.json(passwords);
+    });
+    app3.post("/api/passwords", (req, res) => {
+      const profileId = resolveProfileId(req.body?.profileId);
+      const origin = typeof req.body?.origin === "string" ? req.body.origin.trim() : "";
+      const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
+      const password = typeof req.body?.password === "string" ? req.body.password : "";
+      if (!origin || !username || !password) {
+        res.status(400).json({ error: "Origin, username, and password are required" });
+        return;
+      }
+      const id = v4_default();
+      memoryDb_default.prepare(`
+        INSERT INTO saved_passwords (id, profile_id, origin, username, password, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(profile_id, origin, username) DO UPDATE SET
+          password = excluded.password,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(id, profileId, origin, username, password);
+      res.json({ success: true });
+    });
+    app3.delete("/api/passwords/:id", (req, res) => {
+      memoryDb_default.prepare("DELETE FROM saved_passwords WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
     });
     if (process.env.NODE_ENV !== "development") {
       app3.use(import_express.default.static(import_path3.default.join(process.cwd(), "dist")));
