@@ -1,59 +1,122 @@
-const SEARCH_ENGINES = {
+export type SearchEngineName = 'duckduckgo' | 'google' | 'bing';
+
+const SEARCH_ENGINES: Record<SearchEngineName, (query: string) => string> = {
   duckduckgo: (query: string) => `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
   google: (query: string) => `https://www.google.com/search?q=${encodeURIComponent(query)}`,
   bing: (query: string) => `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
 };
 
-const DEFAULT_SEARCH_ENGINE = 'duckduckgo';
+const SEARCH_ENGINE_HOMES: Record<SearchEngineName, string> = {
+  duckduckgo: 'https://duckduckgo.com/',
+  google: 'https://www.google.com/',
+  bing: 'https://www.bing.com/',
+};
+
+const ENGINE_ALIASES: Record<string, SearchEngineName> = {
+  ddg: 'duckduckgo',
+  duckduckgo: 'duckduckgo',
+  google: 'google',
+  g: 'google',
+  bing: 'bing',
+};
+
+const DEFAULT_SEARCH_ENGINE: SearchEngineName = 'duckduckgo';
 
 export function normalizeUrl(url: string = ''): string {
-  let finalUrl = url.trim();
+  const finalUrl = url.trim();
   if (!finalUrl) return finalUrl;
 
-  // Handle protocol schemes (http, https, ftp, etc.)
   if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(finalUrl)) {
     return finalUrl;
   }
 
-  // Handle localhost and internal IPs
-  if (finalUrl.startsWith('localhost') || finalUrl.startsWith('127.0.0.1') || finalUrl.startsWith('192.168.') || finalUrl.startsWith('10.')) {
+  if (
+    finalUrl.startsWith('localhost') ||
+    finalUrl.startsWith('127.0.0.1') ||
+    finalUrl.startsWith('192.168.') ||
+    finalUrl.startsWith('10.')
+  ) {
     return finalUrl.startsWith('http') ? finalUrl : `http://${finalUrl}`;
   }
 
-  // Handle IP addresses
-  const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;
+  const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/.*)?$/;
   if (ipv4Pattern.test(finalUrl)) {
     return `http://${finalUrl}`;
   }
 
-  // Handle URLs with common TLDs or subdomains without protocol
-  if (finalUrl.includes('.') && !finalUrl.includes(' ') && !finalUrl.includes('?')) {
-    // Looks like a domain, add https
-    return `https://${finalUrl}`;
-  }
-
-  // Handle "www." prefix
   if (finalUrl.startsWith('www.')) {
     return `https://${finalUrl}`;
   }
 
-  // Default: treat as search query
+  if (finalUrl.includes('.') && !/\s/.test(finalUrl)) {
+    return `https://${finalUrl}`;
+  }
+
   return search(finalUrl);
 }
 
-export function search(query: string, engine: keyof typeof SEARCH_ENGINES = DEFAULT_SEARCH_ENGINE): string {
-  const searchFn = SEARCH_ENGINES[engine];
-  if (!searchFn) {
-    return SEARCH_ENGINES[DEFAULT_SEARCH_ENGINE](query);
-  }
+export function search(query: string, engine: SearchEngineName = DEFAULT_SEARCH_ENGINE): string {
+  const searchFn = SEARCH_ENGINES[engine] || SEARCH_ENGINES[DEFAULT_SEARCH_ENGINE];
   return searchFn(query);
 }
 
-export function isUrl(input: string): boolean {
-  // Check if it's a URL-like string
-  const urlPattern = /^(https?:\/\/|ftp:\/\/|localhost|127\.0\.0\.1|192\.168\.|10\.|www\.|[\w\-]+\.[\w\-]+\.)/;
-  return urlPattern.test(input);
+export function getSearchEngineHome(engine: SearchEngineName = DEFAULT_SEARCH_ENGINE): string {
+  return SEARCH_ENGINE_HOMES[engine] || SEARCH_ENGINE_HOMES[DEFAULT_SEARCH_ENGINE];
 }
+
+export function isUrl(input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed) return false;
+
+  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed)) {
+    return true;
+  }
+
+  if (/^(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?(\/|$)/.test(trimmed)) {
+    return true;
+  }
+
+  if (/^(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/|$)/.test(trimmed)) {
+    return true;
+  }
+
+  if (/\s/.test(trimmed)) {
+    return false;
+  }
+
+  return trimmed.includes('.');
+}
+
+export function resolveNavigationInput(
+  input: string,
+  defaultEngine: SearchEngineName = DEFAULT_SEARCH_ENGINE
+): { kind: 'url' | 'search' | 'engine-home'; url: string; engine: SearchEngineName; query?: string } {
+  const trimmed = input.trim();
+
+  if (!trimmed) {
+    return { kind: 'search', url: '', engine: defaultEngine, query: '' };
+  }
+
+  if (isUrl(trimmed)) {
+    return { kind: 'url', url: normalizeUrl(trimmed), engine: defaultEngine };
+  }
+
+  const [firstToken, ...restTokens] = trimmed.split(/\s+/);
+  const engine = ENGINE_ALIASES[firstToken.toLowerCase()];
+  const rest = restTokens.join(' ').trim();
+
+  if (engine && !rest) {
+    return { kind: 'engine-home', url: getSearchEngineHome(engine), engine };
+  }
+
+  if (engine && rest) {
+    return { kind: 'search', url: search(rest, engine), engine, query: rest };
+  }
+
+  return { kind: 'search', url: search(trimmed, defaultEngine), engine: defaultEngine, query: trimmed };
+}
+
+export const SEARCH_ENGINE_OPTIONS: SearchEngineName[] = ['duckduckgo', 'google', 'bing'];
 
 export function isValidUrl(url: string): boolean {
   try {
