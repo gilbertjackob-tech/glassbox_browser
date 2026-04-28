@@ -1,0 +1,6 @@
+{
+  "name": "GlassBox Browser",
+  "description": "An automation-native browser shell with deep DOM inspection, action contracts, and persistent memory.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["remote_browser_control", "automation_engine"]
+}

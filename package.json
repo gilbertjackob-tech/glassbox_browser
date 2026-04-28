@@ -1,0 +1,47 @@
+{
+  "name": "glassbox-browser",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild src/main/main.ts src/preload/preload.ts --bundle --platform=node --outdir=dist-electron --format=esm --external:electron",
+    "electron:dev": "electron .",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^12.9.0",
+    "cors": "^2.8.6",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^17.2.3",
+    "electron": "^41.3.0",
+    "electron-is-dev": "^3.0.1",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "playwright-chromium": "^1.59.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "uuid": "^14.0.0",
+    "vite": "^6.2.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.28.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
