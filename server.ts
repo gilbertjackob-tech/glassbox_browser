@@ -7,6 +7,22 @@ import { actionExecutor } from './src/server/actionExecutor.js';
 import { memoryService } from './src/server/memoryService.js';
 import db from './src/server/db.js';
 
+function getTableColumns(tableName: string): string[] {
+  try {
+    return db.prepare(`PRAGMA table_info(${tableName})`).all().map((column: any) => column.name as string);
+  } catch {
+    return [];
+  }
+}
+
+const downloadColumns = getTableColumns('downloads');
+const downloadFileNameColumn = downloadColumns.includes('file_name') ? 'file_name' : (downloadColumns.includes('filename') ? 'filename' : null);
+const downloadUrlColumn = downloadColumns.includes('url') ? 'url' : null;
+const downloadTimestampColumn = downloadColumns.includes('timestamp') ? 'timestamp' : (downloadColumns.includes('created_at') ? 'created_at' : null);
+
+const actionsColumns = getTableColumns('actions');
+const actionLogsColumns = getTableColumns('action_logs');
+
 async function start() {
   const app = express();
   const port = 3000;
@@ -72,17 +88,46 @@ async function start() {
     let query = 'SELECT * FROM downloads';
     const params: any[] = [];
     if (q) {
-      query += ' WHERE file_name LIKE ? OR url LIKE ?';
-      params.push(`%${q}%`, `%${q}%`);
+      const clauses: string[] = [];
+      if (downloadFileNameColumn) clauses.push(`${downloadFileNameColumn} LIKE ?`);
+      if (downloadUrlColumn) clauses.push(`${downloadUrlColumn} LIKE ?`);
+      if (clauses.length > 0) {
+        query += ` WHERE (${clauses.join(' OR ')})`;
+        params.push(...clauses.map(() => `%${q}%`));
+      }
     }
-    query += ' ORDER BY timestamp DESC LIMIT 50';
+    query += ` ORDER BY ${downloadTimestampColumn || 'rowid'} DESC LIMIT 50`;
     const downloads = db.prepare(query).all(...params);
     res.json(downloads);
   });
 
   app.get('/api/memory/logs', (req, res) => {
-    const logs = db.prepare('SELECT * FROM action_logs ORDER BY timestamp DESC LIMIT 50').all();
-    res.json(logs);
+    if (actionsColumns.length > 0) {
+      const logs = db.prepare(`
+        SELECT
+          id,
+          type AS action_type,
+          COALESCE(intent, '') AS intent,
+          COALESCE(success, 0) AS success,
+          COALESCE(reason, '') AS reason,
+          created_at AS timestamp,
+          NULL AS before_dom_hash,
+          NULL AS after_dom_hash
+        FROM actions
+        ORDER BY created_at DESC
+        LIMIT 50
+      `).all();
+      res.json(logs);
+      return;
+    }
+
+    if (actionLogsColumns.length > 0) {
+      const logs = db.prepare('SELECT * FROM action_logs ORDER BY timestamp DESC LIMIT 50').all();
+      res.json(logs);
+      return;
+    }
+
+    res.json([]);
   });
 
   // Vite Middleware

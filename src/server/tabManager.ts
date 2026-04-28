@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { join } from 'path';
 import { createRequire } from 'module';
 
-const require = createRequire(import.meta.url);
+const require = createRequire(typeof __filename === 'string' ? __filename : `${process.cwd()}\\src\\server\\tabManager.ts`);
 
 // Defensive Electron import for Node/Vite preview
 let app: any, BrowserWindow: any, BrowserView: any, session: any;

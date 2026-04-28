@@ -105,11 +105,24 @@ export class ActionExecutor {
       evidence.dom_changed = (beforeDomHash !== afterDomHash);
       evidence.action_executed = success;
 
-      if (success && (evidence.url_changed || evidence.dom_changed)) {
-        reason = 'VERIFIED: State change detected';
-      } else if (success) {
-        reason = 'COMPLETED: No state shift detected';
-        success = false; // Fail if no change as per strict requirement
+      if (success) {
+        // For navigation, URL change is sufficient verification
+        if (contract.actionType === 'navigate') {
+          if (evidence.url_changed) {
+            reason = 'VERIFIED: Navigation successful (URL changed)';
+          } else {
+            // Still mark as successful if the navigate was executed (URL may not change if already on same URL)
+            reason = 'COMPLETED: Navigation executed';
+          }
+        } else {
+          // For other actions, require state change
+          if (evidence.url_changed || evidence.dom_changed) {
+            reason = 'VERIFIED: State change detected';
+          } else {
+            reason = 'COMPLETED: No state shift detected';
+            success = false; // Fail if no change as per strict requirement for non-navigate actions
+          }
+        }
       }
 
     } catch (e: any) {

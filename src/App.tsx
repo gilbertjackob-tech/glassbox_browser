@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { normalizeUrl, isUrl, search } from './lib/urlUtils';
+import { normalizeUrl, resolveNavigationInput, SEARCH_ENGINE_OPTIONS, type SearchEngineName } from './lib/urlUtils';
 
 // --- Types ---
 
@@ -68,6 +68,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
   const [suggestedSkills, setSuggestedSkills] = useState<any[]>([]);
+  const [searchEngine, setSearchEngine] = useState<SearchEngineName>('duckduckgo');
   const [isNavigating, setIsNavigating] = useState(false);
   const [navError, setNavError] = useState<string | null>(null);
   const browserViewRef = useRef<HTMLDivElement>(null);
@@ -327,26 +328,17 @@ export default function App() {
     if (!urlInput) return;
     
     const trimmedInput = urlInput.trim();
-    
-    // Determine if it's a URL or a search query
-    const isUrlLike = isUrl(trimmedInput);
-    
-    if (isUrlLike) {
-      // It's a URL - navigate to it
-      if (!activeTabId) {
-        createTab(trimmedInput);
-        return;
-      }
-      executeNavigate(activeTabId, trimmedInput);
-    } else {
-      // It's a search query - search with DuckDuckGo
-      if (!activeTabId) {
-        createTab(trimmedInput);
-        return;
-      }
-      const searchUrl = search(trimmedInput, 'duckduckgo');
-      executeNavigate(activeTabId, searchUrl);
+
+    const navigationTarget = resolveNavigationInput(trimmedInput, searchEngine);
+
+    if (!navigationTarget.url) return;
+
+    if (!activeTabId) {
+      createTab(navigationTarget.url);
+      return;
     }
+
+    executeNavigate(activeTabId, navigationTarget.url);
   };
 
   const handleAction = async (type: 'click' | 'type', target: any, input?: string) => {
@@ -453,6 +445,22 @@ export default function App() {
                   <option key={p.id} value={p.id} className="bg-gb-bg">{p.name || p.id}</option>
                 ))}
                 <option value="__new__" className="bg-gb-bg text-gb-accent-success">+ NEW PROFILE</option>
+              </select>
+            </div>
+            <div className="flex items-center px-2 py-1 rounded bg-gb-surface-bright border border-gb-border text-[9px] font-bold text-slate-200 focus-within:border-gb-accent-primary transition-colors">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
+              <span className="opacity-60 mr-1">ENGINE:</span>
+              <select
+                value={searchEngine}
+                onChange={(e) => setSearchEngine(e.target.value as SearchEngineName)}
+                className="bg-transparent uppercase outline-none border-none text-slate-200 cursor-pointer appearance-none pr-3"
+                style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%228%22%20height%3D%225%22%20viewBox%3D%220%200%208%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M4%205L0%200H8L4%205Z%22%20fill%3D%22%2394A3B8%22/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center' }}
+              >
+                {SEARCH_ENGINE_OPTIONS.map(engine => (
+                  <option key={engine} value={engine} className="bg-gb-bg">
+                    {engine === 'duckduckgo' ? 'DuckDuckGo' : engine.charAt(0).toUpperCase() + engine.slice(1)}
+                  </option>
+                ))}
               </select>
             </div>
             <button 

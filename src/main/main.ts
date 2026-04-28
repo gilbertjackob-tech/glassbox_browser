@@ -18,7 +18,7 @@ async function createWindow() {
     width: 1400,
     height: 900,
     webPreferences: {
-      preload: join(app.getAppPath(), 'dist-electron', 'preload.js'),
+      preload: join(app.getAppPath(), 'dist-electron', 'preload', 'preload.cjs'),
     },
     titleBarStyle: 'hidden',
   });
