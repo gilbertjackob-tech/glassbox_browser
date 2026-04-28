@@ -25198,6 +25198,7 @@ var memoryDb_default = db;
 var import_path2 = require("path");
 var import_module = require("module");
 var require2 = (0, import_module.createRequire)(typeof __filename === "string" ? __filename : `${process.cwd()}\\src\\server\\tabManager.ts`);
+var DEFAULT_LANDING_URL = "https://bing.com";
 var app;
 var BrowserView;
 var session;
@@ -25250,10 +25251,11 @@ var TabManager = class {
   getActiveTabId() {
     return this.activeTabId;
   }
-  createTabSync(profileId = "default") {
+  createTabSync(profileId = "default", initialUrl = DEFAULT_LANDING_URL) {
     const id = v4_default();
     const partition = `persist:gb_profile_${profileId}`;
     const sess = session.fromPartition(partition);
+    const startUrl = initialUrl.trim() || DEFAULT_LANDING_URL;
     const view = new BrowserView({
       webPreferences: {
         preload: (0, import_path2.join)(app.getAppPath(), "dist-electron", "preload", "preload.cjs"),
@@ -25266,8 +25268,8 @@ var TabManager = class {
       id,
       profileId,
       view,
-      url: "about:blank",
-      title: "New Tab",
+      url: startUrl,
+      title: startUrl === DEFAULT_LANDING_URL ? "Bing" : "New Tab",
       domHash: "",
       elements: []
     };
@@ -25292,6 +25294,9 @@ var TabManager = class {
       tab.url = url;
       this.syncHistory(profileId, url, tab.title);
       memoryDb_default.prepare("UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?").run(url, id);
+    });
+    void view.webContents.loadURL(startUrl).catch((error) => {
+      console.warn("Default tab load failed:", error?.message || error);
     });
     return id;
   }
@@ -25688,7 +25693,8 @@ function startApiServer(port = 3e3) {
     });
     app3.post("/api/tabs", (req, res) => {
       const profileId = typeof req.body?.profileId === "string" ? req.body.profileId : "default";
-      const id = tabManager.createTabSync(profileId);
+      const initialUrl = typeof req.body?.initialUrl === "string" ? req.body.initialUrl : void 0;
+      const id = tabManager.createTabSync(profileId, initialUrl);
       res.json({ id });
     });
     app3.delete("/api/tabs/:id", async (req, res) => {

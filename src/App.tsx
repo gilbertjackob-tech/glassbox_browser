@@ -342,7 +342,10 @@ export default function App() {
     const res = await fetch('/api/tabs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profileId: profileIdOverride || activeProfileId }),
+      body: JSON.stringify({
+        profileId: profileIdOverride || activeProfileId,
+        initialUrl: urlToAutoNavigate?.trim() || undefined,
+      }),
     });
 
     const { id: tabId } = await res.json();
@@ -350,10 +353,6 @@ export default function App() {
     await fetchTabs(profileIdOverride || activeProfileId, tabId);
     setActiveTabId(tabId);
     requestAnimationFrame(() => syncBrowserViewBounds(tabId));
-
-    if (typeof urlToAutoNavigate === 'string' && urlToAutoNavigate.trim().length > 0) {
-      await executeNavigate(tabId, urlToAutoNavigate);
-    }
 
     return tabId;
   };

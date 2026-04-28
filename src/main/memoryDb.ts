@@ -19,6 +19,12 @@ export function initDb() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS tabs (
       id TEXT PRIMARY KEY,
       profile_id TEXT,
@@ -44,6 +50,17 @@ export function initDb() {
       filename TEXT,
       path TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_passwords (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      username TEXT NOT NULL,
+      password TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(profile_id, origin, username)
     );
 
     CREATE TABLE IF NOT EXISTS actions (
@@ -96,6 +113,12 @@ export function initDb() {
   if (!defaultProfile) {
     db.prepare('INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)')
       .run('default', 'Default', 'persist:profile-default');
+  }
+
+  const activeProfileSetting = db.prepare('SELECT key FROM app_settings WHERE key = ?').get('active_profile_id');
+  if (!activeProfileSetting) {
+    db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)')
+      .run('active_profile_id', 'default');
   }
 }
 
