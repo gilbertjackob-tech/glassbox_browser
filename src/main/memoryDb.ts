@@ -15,6 +15,7 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS profiles (
       id TEXT PRIMARY KEY,
       name TEXT,
+      email TEXT,
       partition TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
@@ -109,6 +110,9 @@ export function initDb() {
   `);
 
   const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map((column: any) => column.name);
+  if (!profileColumns.includes('email')) {
+    db.prepare('ALTER TABLE profiles ADD COLUMN email TEXT').run();
+  }
   if (!profileColumns.includes('partition')) {
     db.prepare('ALTER TABLE profiles ADD COLUMN partition TEXT').run();
   }
