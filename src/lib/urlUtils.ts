@@ -20,7 +20,50 @@ const ENGINE_ALIASES: Record<string, SearchEngineName> = {
   bing: 'bing',
 };
 
+const SITE_ALIASES: Record<string, string> = {
+  google: 'https://www.google.com/',
+  facebook: 'https://www.facebook.com/',
+  fb: 'https://www.facebook.com/',
+  youtube: 'https://www.youtube.com/',
+  yt: 'https://www.youtube.com/',
+  gmail: 'https://mail.google.com/',
+  mail: 'https://mail.google.com/',
+  chatgpt: 'https://chatgpt.com/',
+  openai: 'https://chatgpt.com/',
+  gemini: 'https://gemini.google.com/',
+  github: 'https://github.com/',
+  git: 'https://github.com/',
+  x: 'https://x.com/',
+  twitter: 'https://x.com/',
+  linkedin: 'https://www.linkedin.com/',
+  reddit: 'https://www.reddit.com/',
+  instagram: 'https://www.instagram.com/',
+  whatsapp: 'https://web.whatsapp.com/',
+  telegram: 'https://web.telegram.org/',
+  discord: 'https://discord.com/app',
+  notion: 'https://www.notion.so/',
+  drive: 'https://drive.google.com/',
+  gdrive: 'https://drive.google.com/',
+  docs: 'https://docs.google.com/',
+  sheets: 'https://sheets.google.com/',
+  maps: 'https://maps.google.com/',
+  translate: 'https://translate.google.com/',
+  fiverr: 'https://www.fiverr.com/',
+  upwork: 'https://www.upwork.com/',
+  amazon: 'https://www.amazon.com/',
+  netflix: 'https://www.netflix.com/',
+  spotify: 'https://open.spotify.com/',
+};
+
 const DEFAULT_SEARCH_ENGINE: SearchEngineName = 'duckduckgo';
+
+function getSiteAlias(input: string): string | null {
+  const key = input.trim().toLowerCase();
+
+  if (!key) return null;
+
+  return SITE_ALIASES[key] || null;
+}
 
 export function normalizeUrl(url: string = ''): string {
   const finalUrl = url.trim();
@@ -90,11 +133,21 @@ export function isUrl(input: string): boolean {
 export function resolveNavigationInput(
   input: string,
   defaultEngine: SearchEngineName = DEFAULT_SEARCH_ENGINE
-): { kind: 'url' | 'search' | 'engine-home'; url: string; engine: SearchEngineName; query?: string } {
+): { kind: 'url' | 'search' | 'engine-home' | 'site-alias'; url: string; engine: SearchEngineName; query?: string; alias?: string } {
   const trimmed = input.trim();
 
   if (!trimmed) {
     return { kind: 'search', url: '', engine: defaultEngine, query: '' };
+  }
+
+  const siteAliasUrl = getSiteAlias(trimmed);
+  if (siteAliasUrl) {
+    return {
+      kind: 'site-alias',
+      url: siteAliasUrl,
+      engine: defaultEngine,
+      alias: trimmed.toLowerCase(),
+    };
   }
 
   if (isUrl(trimmed)) {
@@ -115,6 +168,8 @@ export function resolveNavigationInput(
 
   return { kind: 'search', url: search(trimmed, defaultEngine), engine: defaultEngine, query: trimmed };
 }
+
+export const SITE_ALIAS_OPTIONS = Object.keys(SITE_ALIASES);
 
 export const SEARCH_ENGINE_OPTIONS: SearchEngineName[] = ['duckduckgo', 'google', 'bing'];
 
