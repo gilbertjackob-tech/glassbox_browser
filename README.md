@@ -57,6 +57,7 @@ npm run gb -- type --tab <tabId> --sel "input[name='email']" --text "user@exampl
 ```
 
 Profiles are local-only and isolated by Electron persistent session partition. Existing old partition data is not auto-migrated.
+GlassBox profiles are Electron profiles, not real Chrome profiles. Login cookies and session data persist per GlassBox profile, but Chrome browser sync/import is not implemented.
 
 ## 📖 How it works
 1. **Open a Tab**: Launch an isolated BrowserView session.
