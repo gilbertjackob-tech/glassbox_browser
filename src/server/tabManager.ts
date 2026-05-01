@@ -42,7 +42,9 @@ try {
 export interface TabMetadata {
   id: string;
   profileId: string;
+  partition: string;
   view: any; // BrowserView
+  webContents: any; // Electron.WebContents
   url: string;
   title: string;
   domHash: string;
@@ -63,6 +65,25 @@ class TabManager {
     return this.activeTabId;
   }
 
+  private getDefaultViewBounds() {
+    if (!this.window) {
+      return this.lastBounds;
+    }
+
+    const [width, height] = typeof this.window.getContentSize === 'function'
+      ? this.window.getContentSize()
+      : [1280, 800];
+
+    const TOOLBAR_HEIGHT = 60;
+
+    return {
+      x: 0,
+      y: TOOLBAR_HEIGHT,
+      width: Math.max(1, width),
+      height: Math.max(1, height - TOOLBAR_HEIGHT),
+    };
+  }
+
   createTabSync(profileId: string = 'default', initialUrl: string = DEFAULT_LANDING_URL): string {
     const profile = profileStore.get(profileId);
     if (!profile) {
@@ -70,13 +91,12 @@ class TabManager {
     }
 
     const id = uuidv4();
-    const sess = session.fromPartition(profile.partition);
     const startUrl = initialUrl.trim() || DEFAULT_LANDING_URL;
 
     const view = new BrowserView({
       webPreferences: {
         preload: join(app.getAppPath(), 'dist-electron', 'preload', 'preload.cjs'),
-        session: sess,
+        partition: profile.partition,
         contextIsolation: true,
         sandbox: false,
       }
@@ -85,7 +105,9 @@ class TabManager {
     const tab: TabMetadata = {
       id,
       profileId: profile.id,
+      partition: profile.partition,
       view,
+      webContents: view.webContents,
       url: startUrl,
       title: startUrl === DEFAULT_LANDING_URL ? 'Bing' : 'New Tab',
       domHash: '',
@@ -100,29 +122,29 @@ class TabManager {
 
     this.tabs.set(id, tab);
 
-    view.webContents.on('did-start-loading', () => console.log('Loading started'));
-    view.webContents.on('did-finish-load', () => console.log('Page loaded:', view.webContents.getURL()));
+    tab.webContents.on('did-start-loading', () => console.log('Loading started'));
+    tab.webContents.on('did-finish-load', () => console.log('Page loaded:', tab.webContents.getURL()));
 
     // Sync metadata on navigation
-    view.webContents.on('page-title-updated', (e, title) => {
+    tab.webContents.on('page-title-updated', (_e: any, title: string) => {
       tab.title = title;
-      this.syncHistory(profile.id, view.webContents.getURL(), title);
+      this.syncHistory(profile.id, tab.webContents.getURL(), title);
       db.prepare('UPDATE tabs SET title = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(title, id);
     });
 
-    view.webContents.on('did-navigate', (_, url) => {
+    tab.webContents.on('did-navigate', (_: any, url: string) => {
       tab.url = url;
       this.syncHistory(profile.id, url, tab.title);
       db.prepare('UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(url, id);
     });
 
-    view.webContents.on('did-navigate-in-page', (_, url) => {
+    tab.webContents.on('did-navigate-in-page', (_: any, url: string) => {
       tab.url = url;
       this.syncHistory(profile.id, url, tab.title);
       db.prepare('UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(url, id);
     });
 
-    void view.webContents.loadURL(startUrl).catch((error: any) => {
+    void tab.webContents.loadURL(startUrl).catch((error: any) => {
       console.warn('Default tab load failed:', error?.message || error);
     });
 
@@ -172,15 +194,40 @@ class TabManager {
     };
   }
 
-  setActiveTab(id: string, bounds: { x: number; y: number; width: number; height: number }) {
+  setActiveTab(id: string, bounds?: { x: number; y: number; width: number; height: number }) {
     const tab = this.tabs.get(id);
-    if (tab && this.window) {
-      this.activeTabId = id;
-      this.lastBounds = this.clampBounds(bounds);
-      this.window.setBrowserView(tab.view);
+    if (!tab || !this.window) {
+      return;
+    }
 
-      tab.view.setBounds(this.lastBounds);
-      tab.view.setAutoResize({ width: true, height: true });
+    this.activeTabId = id;
+
+    const attachedViews = typeof this.window.getBrowserViews === 'function'
+      ? this.window.getBrowserViews()
+      : [];
+
+    for (const entry of this.tabs.values()) {
+      if (entry.id !== id && attachedViews.includes(entry.view)) {
+        this.window.removeBrowserView(entry.view);
+      }
+    }
+
+    const refreshedAttachedViews = typeof this.window.getBrowserViews === 'function'
+      ? this.window.getBrowserViews()
+      : [];
+
+    if (!refreshedAttachedViews.includes(tab.view)) {
+      this.window.addBrowserView(tab.view);
+    }
+
+    const finalBounds = this.clampBounds(bounds || this.getDefaultViewBounds());
+    this.lastBounds = finalBounds;
+
+    tab.view.setBounds(finalBounds);
+    tab.view.setAutoResize({ width: true, height: true });
+
+    if (typeof this.window.focus === 'function') {
+      this.window.focus();
     }
   }
 
@@ -190,7 +237,7 @@ class TabManager {
       throw new Error('TAB_NOT_FOUND');
     }
 
-    this.setActiveTab(id, this.lastBounds);
+    this.setActiveTab(id);
     return {
       tabId: tab.id,
       profileId: tab.profileId,
@@ -199,23 +246,36 @@ class TabManager {
     };
   }
 
-  async navigateTab(id: string, url: string) {
+  async navigateTab(id: string, url: string, timeoutMs = 15000) {
     const tab = this.tabs.get(id);
     if (!tab) {
       throw new Error('TAB_NOT_FOUND');
     }
 
     if (this.activeTabId !== id) {
-      this.setActiveTab(id, this.lastBounds);
+      this.setActiveTab(id);
     }
 
-    await tab.view.webContents.loadURL(url);
-    return { success: true, url };
+    const waitForLoad = new Promise<void>((resolve) => {
+      const done = () => resolve();
+      tab.webContents.once('did-finish-load', done);
+    });
+
+    await tab.webContents.loadURL(url);
+
+    await Promise.race([
+      waitForLoad,
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+
+    tab.url = tab.webContents.getURL();
+
+    return { success: true, url: tab.url };
   }
 
   findTabByWebContents(wc: any) {
     for (const tab of this.tabs.values()) {
-      if (tab.view.webContents === wc) return tab;
+      if (tab.webContents === wc) return tab;
     }
     return null;
   }
@@ -278,19 +338,30 @@ class TabManager {
   }
 
   private destroyTabView(tab: TabMetadata) {
-    if (this.window?.getBrowserView?.() === tab.view) {
+    if (this.window && typeof this.window.getBrowserViews === 'function') {
+      const views = this.window.getBrowserViews();
+      if (views.includes(tab.view)) {
+        this.window.removeBrowserView(tab.view);
+      }
+    } else if (this.window?.getBrowserView?.() === tab.view) {
       this.window.setBrowserView(null);
     }
 
-    const webContents = tab.view.webContents as {
+    const webContents = tab.webContents as {
       isDestroyed: () => boolean;
       removeAllListeners: () => void;
+      destroy?: () => void;
       close: () => void;
     };
 
     if (!webContents.isDestroyed()) {
       webContents.removeAllListeners();
-      webContents.close();
+
+      if (typeof webContents.destroy === 'function') {
+        webContents.destroy();
+      } else if (typeof webContents.close === 'function') {
+        webContents.close();
+      }
     }
   }
 
@@ -309,10 +380,16 @@ class TabManager {
 
     if (nextActiveTabId && this.window) {
       this.activeTabId = nextActiveTabId;
-      this.setActiveTab(nextActiveTabId, this.lastBounds);
+      this.setActiveTab(nextActiveTabId);
     } else if (this.activeTabId === id) {
       this.activeTabId = null;
-      this.window?.setBrowserView(null);
+      if (this.window && typeof this.window.getBrowserViews === 'function') {
+        for (const view of this.window.getBrowserViews()) {
+          this.window.removeBrowserView(view);
+        }
+      } else {
+        this.window?.setBrowserView(null);
+      }
     }
 
     return { nextActiveTabId };

@@ -113,6 +113,22 @@ export function initDb() {
     db.prepare('ALTER TABLE profiles ADD COLUMN partition TEXT').run();
   }
 
+  const actionColumns = db.prepare('PRAGMA table_info(actions)').all().map((column: any) => column.name);
+
+  const actionColumnMigrations: Record<string, string> = {
+    before_url: 'ALTER TABLE actions ADD COLUMN before_url TEXT',
+    after_url: 'ALTER TABLE actions ADD COLUMN after_url TEXT',
+    before_dom_hash: 'ALTER TABLE actions ADD COLUMN before_dom_hash TEXT',
+    after_dom_hash: 'ALTER TABLE actions ADD COLUMN after_dom_hash TEXT',
+    evidence_json: 'ALTER TABLE actions ADD COLUMN evidence_json TEXT',
+  };
+
+  for (const [column, sql] of Object.entries(actionColumnMigrations)) {
+    if (!actionColumns.includes(column)) {
+      db.prepare(sql).run();
+    }
+  }
+
   // Create default profile
   const defaultProfile = db.prepare('SELECT id FROM profiles WHERE id = ?').get('default');
   if (!defaultProfile) {

@@ -25173,6 +25173,19 @@ function initDb() {
   if (!profileColumns.includes("partition")) {
     db.prepare("ALTER TABLE profiles ADD COLUMN partition TEXT").run();
   }
+  const actionColumns = db.prepare("PRAGMA table_info(actions)").all().map((column) => column.name);
+  const actionColumnMigrations = {
+    before_url: "ALTER TABLE actions ADD COLUMN before_url TEXT",
+    after_url: "ALTER TABLE actions ADD COLUMN after_url TEXT",
+    before_dom_hash: "ALTER TABLE actions ADD COLUMN before_dom_hash TEXT",
+    after_dom_hash: "ALTER TABLE actions ADD COLUMN after_dom_hash TEXT",
+    evidence_json: "ALTER TABLE actions ADD COLUMN evidence_json TEXT"
+  };
+  for (const [column, sql] of Object.entries(actionColumnMigrations)) {
+    if (!actionColumns.includes(column)) {
+      db.prepare(sql).run();
+    }
+  }
   const defaultProfile = db.prepare("SELECT id FROM profiles WHERE id = ?").get("default");
   if (!defaultProfile) {
     db.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run("default", "Default", "persist:gb-profile-default");
@@ -25430,18 +25443,30 @@ var TabManager = class {
   getActiveTabId() {
     return this.activeTabId;
   }
+  getDefaultViewBounds() {
+    if (!this.window) {
+      return this.lastBounds;
+    }
+    const [width, height] = typeof this.window.getContentSize === "function" ? this.window.getContentSize() : [1280, 800];
+    const TOOLBAR_HEIGHT = 60;
+    return {
+      x: 0,
+      y: TOOLBAR_HEIGHT,
+      width: Math.max(1, width),
+      height: Math.max(1, height - TOOLBAR_HEIGHT)
+    };
+  }
   createTabSync(profileId = "default", initialUrl = DEFAULT_LANDING_URL) {
     const profile = profileStore.get(profileId);
     if (!profile) {
       throw new Error("PROFILE_NOT_FOUND");
     }
     const id = v4_default();
-    const sess = session.fromPartition(profile.partition);
     const startUrl = initialUrl.trim() || DEFAULT_LANDING_URL;
     const view = new BrowserView({
       webPreferences: {
         preload: (0, import_path2.join)(app.getAppPath(), "dist-electron", "preload", "preload.cjs"),
-        session: sess,
+        partition: profile.partition,
         contextIsolation: true,
         sandbox: false
       }
@@ -25449,7 +25474,9 @@ var TabManager = class {
     const tab = {
       id,
       profileId: profile.id,
+      partition: profile.partition,
       view,
+      webContents: view.webContents,
       url: startUrl,
       title: startUrl === DEFAULT_LANDING_URL ? "Bing" : "New Tab",
       domHash: "",
@@ -25460,24 +25487,24 @@ var TabManager = class {
       VALUES (?, ?, ?, ?)
     `).run(id, profile.id, tab.url, tab.title);
     this.tabs.set(id, tab);
-    view.webContents.on("did-start-loading", () => console.log("Loading started"));
-    view.webContents.on("did-finish-load", () => console.log("Page loaded:", view.webContents.getURL()));
-    view.webContents.on("page-title-updated", (e, title) => {
+    tab.webContents.on("did-start-loading", () => console.log("Loading started"));
+    tab.webContents.on("did-finish-load", () => console.log("Page loaded:", tab.webContents.getURL()));
+    tab.webContents.on("page-title-updated", (_e, title) => {
       tab.title = title;
-      this.syncHistory(profile.id, view.webContents.getURL(), title);
+      this.syncHistory(profile.id, tab.webContents.getURL(), title);
       memoryDb_default.prepare("UPDATE tabs SET title = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?").run(title, id);
     });
-    view.webContents.on("did-navigate", (_, url) => {
+    tab.webContents.on("did-navigate", (_, url) => {
       tab.url = url;
       this.syncHistory(profile.id, url, tab.title);
       memoryDb_default.prepare("UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?").run(url, id);
     });
-    view.webContents.on("did-navigate-in-page", (_, url) => {
+    tab.webContents.on("did-navigate-in-page", (_, url) => {
       tab.url = url;
       this.syncHistory(profile.id, url, tab.title);
       memoryDb_default.prepare("UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?").run(url, id);
     });
-    void view.webContents.loadURL(startUrl).catch((error) => {
+    void tab.webContents.loadURL(startUrl).catch((error) => {
       console.warn("Default tab load failed:", error?.message || error);
     });
     return id;
@@ -25518,12 +25545,26 @@ var TabManager = class {
   }
   setActiveTab(id, bounds) {
     const tab = this.tabs.get(id);
-    if (tab && this.window) {
-      this.activeTabId = id;
-      this.lastBounds = this.clampBounds(bounds);
-      this.window.setBrowserView(tab.view);
-      tab.view.setBounds(this.lastBounds);
-      tab.view.setAutoResize({ width: true, height: true });
+    if (!tab || !this.window) {
+      return;
+    }
+    this.activeTabId = id;
+    const attachedViews = typeof this.window.getBrowserViews === "function" ? this.window.getBrowserViews() : [];
+    for (const entry of this.tabs.values()) {
+      if (entry.id !== id && attachedViews.includes(entry.view)) {
+        this.window.removeBrowserView(entry.view);
+      }
+    }
+    const refreshedAttachedViews = typeof this.window.getBrowserViews === "function" ? this.window.getBrowserViews() : [];
+    if (!refreshedAttachedViews.includes(tab.view)) {
+      this.window.addBrowserView(tab.view);
+    }
+    const finalBounds = this.clampBounds(bounds || this.getDefaultViewBounds());
+    this.lastBounds = finalBounds;
+    tab.view.setBounds(finalBounds);
+    tab.view.setAutoResize({ width: true, height: true });
+    if (typeof this.window.focus === "function") {
+      this.window.focus();
     }
   }
   focusTab(id) {
@@ -25531,7 +25572,7 @@ var TabManager = class {
     if (!tab) {
       throw new Error("TAB_NOT_FOUND");
     }
-    this.setActiveTab(id, this.lastBounds);
+    this.setActiveTab(id);
     return {
       tabId: tab.id,
       profileId: tab.profileId,
@@ -25539,20 +25580,29 @@ var TabManager = class {
       title: tab.title
     };
   }
-  async navigateTab(id, url) {
+  async navigateTab(id, url, timeoutMs = 15e3) {
     const tab = this.tabs.get(id);
     if (!tab) {
       throw new Error("TAB_NOT_FOUND");
     }
     if (this.activeTabId !== id) {
-      this.setActiveTab(id, this.lastBounds);
+      this.setActiveTab(id);
     }
-    await tab.view.webContents.loadURL(url);
-    return { success: true, url };
+    const waitForLoad = new Promise((resolve) => {
+      const done = () => resolve();
+      tab.webContents.once("did-finish-load", done);
+    });
+    await tab.webContents.loadURL(url);
+    await Promise.race([
+      waitForLoad,
+      new Promise((resolve) => setTimeout(resolve, timeoutMs))
+    ]);
+    tab.url = tab.webContents.getURL();
+    return { success: true, url: tab.url };
   }
   findTabByWebContents(wc) {
     for (const tab of this.tabs.values()) {
-      if (tab.view.webContents === wc) return tab;
+      if (tab.webContents === wc) return tab;
     }
     return null;
   }
@@ -25606,13 +25656,22 @@ var TabManager = class {
     );
   }
   destroyTabView(tab) {
-    if (this.window?.getBrowserView?.() === tab.view) {
+    if (this.window && typeof this.window.getBrowserViews === "function") {
+      const views = this.window.getBrowserViews();
+      if (views.includes(tab.view)) {
+        this.window.removeBrowserView(tab.view);
+      }
+    } else if (this.window?.getBrowserView?.() === tab.view) {
       this.window.setBrowserView(null);
     }
-    const webContents = tab.view.webContents;
+    const webContents = tab.webContents;
     if (!webContents.isDestroyed()) {
       webContents.removeAllListeners();
-      webContents.close();
+      if (typeof webContents.destroy === "function") {
+        webContents.destroy();
+      } else if (typeof webContents.close === "function") {
+        webContents.close();
+      }
     }
   }
   async closeTab(id) {
@@ -25627,10 +25686,16 @@ var TabManager = class {
     memoryDb_default.prepare("DELETE FROM tabs WHERE id = ?").run(id);
     if (nextActiveTabId && this.window) {
       this.activeTabId = nextActiveTabId;
-      this.setActiveTab(nextActiveTabId, this.lastBounds);
+      this.setActiveTab(nextActiveTabId);
     } else if (this.activeTabId === id) {
       this.activeTabId = null;
-      this.window?.setBrowserView(null);
+      if (this.window && typeof this.window.getBrowserViews === "function") {
+        for (const view of this.window.getBrowserViews()) {
+          this.window.removeBrowserView(view);
+        }
+      } else {
+        this.window?.setBrowserView(null);
+      }
     }
     return { nextActiveTabId };
   }
@@ -25862,6 +25927,7 @@ var MemoryService = class {
 var memoryService = new MemoryService();
 
 // src/server/vlmPageApi.ts
+var import_crypto = require("crypto");
 function getTabOrThrow(tabId) {
   const tab = tabManager.getTab(tabId);
   if (!tab) {
@@ -25873,13 +25939,53 @@ function pageScript(fn, args = []) {
   return `(${fn.toString()})(...${JSON.stringify(args)})`;
 }
 async function runInPage(tab, fn, args = []) {
-  return await tab.view.webContents.executeJavaScript(pageScript(fn, args), true);
+  return await tab.webContents.executeJavaScript(pageScript(fn, args), true);
 }
-function logAction(tab, type, target, value, success, reason, evidence) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+async function getDomHash(tab) {
+  if (tab.domHash) {
+    return tab.domHash;
+  }
+  try {
+    const html = await tab.webContents.executeJavaScript(
+      "document.documentElement.outerHTML",
+      true
+    );
+    return (0, import_crypto.createHash)("sha256").update(String(html || "")).digest("hex");
+  } catch {
+    return "unavailable";
+  }
+}
+async function collectActionEvidence(tab, before, extra = {}) {
+  return {
+    beforeUrl: before?.url ?? null,
+    afterUrl: tab.webContents.getURL(),
+    beforeDomHash: before?.domHash ?? null,
+    afterDomHash: await getDomHash(tab),
+    ...extra
+  };
+}
+async function logAction(tab, type, target, value, success, reason, evidence) {
   try {
     memoryDb_default.prepare(`
-      INSERT INTO actions (id, tab_id, profile_id, type, target, value, success, reason)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO actions (
+        id,
+        tab_id,
+        profile_id,
+        type,
+        target,
+        value,
+        success,
+        reason,
+        before_url,
+        after_url,
+        before_dom_hash,
+        after_dom_hash,
+        evidence_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       v4_default(),
       tab.id,
@@ -25888,7 +25994,12 @@ function logAction(tab, type, target, value, success, reason, evidence) {
       target == null ? null : JSON.stringify(target),
       value == null ? null : String(value),
       success ? 1 : 0,
-      reason || JSON.stringify(evidence || {})
+      reason || "",
+      evidence?.beforeUrl ?? null,
+      evidence?.afterUrl ?? null,
+      evidence?.beforeDomHash ?? null,
+      evidence?.afterDomHash ?? null,
+      JSON.stringify(evidence || {})
     );
   } catch (error) {
     console.warn("Failed to log VLM action", error);
@@ -25942,7 +26053,7 @@ var vlmPageApi = {
     const html = await runInPage(tab, () => document.documentElement.outerHTML);
     return {
       tabId,
-      url: tab.view.webContents.getURL(),
+      url: tab.webContents.getURL(),
       title: tab.title,
       html,
       capturedAt: Date.now()
@@ -25961,7 +26072,15 @@ var vlmPageApi = {
         const result = document.evaluate(expression, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
         return Array.from({ length: Math.min(result.snapshotLength, input.limit) }, (_, index) => result.snapshotItem(index)).filter(Boolean);
       }
-      const matches = input.selector ? Array.from(document.querySelectorAll(input.selector)).slice(0, input.limit) : allByXPath(input.xpath);
+      let matches = [];
+      try {
+        matches = input.selector ? Array.from(document.querySelectorAll(input.selector)).slice(0, input.limit) : allByXPath(input.xpath);
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : String(error),
+          elements: []
+        };
+      }
       return matches.map((el, index) => {
         const rect = el.getBoundingClientRect();
         const style = window.getComputedStyle(el);
@@ -25988,7 +26107,15 @@ var vlmPageApi = {
         };
       });
     }, [{ selector, xpath, limit }]);
-    return { selector: selector || void 0, xpath: xpath || void 0, count: elements.length, elements };
+    if (elements?.error) {
+      throw new Error(`QUERY_FAILED: ${elements.error}`);
+    }
+    return {
+      selector: selector || void 0,
+      xpath: xpath || void 0,
+      count: Array.isArray(elements) ? elements.length : 0,
+      elements
+    };
   },
   async screenshot(tabId, options) {
     const tab = getTabOrThrow(tabId);
@@ -26016,7 +26143,7 @@ var vlmPageApi = {
       }, [selector]);
     }
     try {
-      const image = await tab.view.webContents.capturePage();
+      const image = await tab.webContents.capturePage();
       const size = image.getSize();
       return { png: image.toPNG(), width: size.width, height: size.height };
     } finally {
@@ -26035,7 +26162,16 @@ var vlmPageApi = {
       throw new Error("SELECTOR_REQUIRED");
     }
     const elements = await runInPage(tab, (input) => {
-      return Array.from(document.querySelectorAll(input.selector)).slice(0, 100).map((el, index) => {
+      let matches = [];
+      try {
+        matches = Array.from(document.querySelectorAll(input.selector)).slice(0, 100);
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : String(error),
+          elements: []
+        };
+      }
+      return matches.map((el, index) => {
         const computed = window.getComputedStyle(el);
         const styles = {};
         for (const property of input.properties) {
@@ -26044,6 +26180,9 @@ var vlmPageApi = {
         return { index, styles };
       });
     }, [{ selector, properties }]);
+    if (elements?.error) {
+      throw new Error(`STYLE_FAILED: ${elements.error}`);
+    }
     return { selector, elements };
   },
   async a11y(tabId) {
@@ -26078,19 +26217,31 @@ var vlmPageApi = {
   },
   async click(tabId, body) {
     const tab = getTabOrThrow(tabId);
-    const beforeUrl = tab.view.webContents.getURL();
-    const beforeDomHash = tab.domHash;
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab)
+    };
     const point = await resolvePoint(tab, body);
     tabManager.focusTab(tabId);
-    tab.view.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
-    tab.view.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
-    tab.view.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
-    const evidence = { beforeUrl, afterUrl: tab.view.webContents.getURL(), beforeDomHash, afterDomHash: tab.domHash, resolvedX: point.x, resolvedY: point.y };
-    logAction(tab, "click", point, null, true, "CLICK_SENT", evidence);
+    tab.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
+    tab.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    tab.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    await sleep(250);
+    const evidence = await collectActionEvidence(tab, before, {
+      resolvedX: point.x,
+      resolvedY: point.y,
+      selector: point.selector,
+      xpath: point.xpath
+    });
+    await logAction(tab, "click", point, null, true, "CLICK_SENT", evidence);
     return { ok: true, resolvedX: point.x, resolvedY: point.y };
   },
   async type(tabId, body) {
     const tab = getTabOrThrow(tabId);
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab)
+    };
     const text = typeof body?.text === "string" ? body.text : "";
     const keys = Array.isArray(body?.keys) ? body.keys.filter((key) => typeof key === "string") : [];
     if (!text && keys.length === 0) {
@@ -26118,18 +26269,37 @@ var vlmPageApi = {
     }
     tabManager.focusTab(tabId);
     for (const char of text) {
-      tab.view.webContents.sendInputEvent({ type: "char", keyCode: char });
+      tab.webContents.sendInputEvent({ type: "char", keyCode: char });
     }
     for (const key of keys) {
       const keyCode = keyForElectron(key);
-      tab.view.webContents.sendInputEvent({ type: "keyDown", keyCode });
-      tab.view.webContents.sendInputEvent({ type: "keyUp", keyCode });
+      tab.webContents.sendInputEvent({ type: "keyDown", keyCode });
+      tab.webContents.sendInputEvent({ type: "keyUp", keyCode });
     }
-    logAction(tab, "type", { selector, xpath, keys }, body?.targetType === "password" ? "[MASKED]" : text, true, "TYPE_SENT", {});
+    await sleep(100);
+    const evidence = await collectActionEvidence(tab, before, {
+      selector,
+      xpath,
+      typedLength: text.length,
+      keys
+    });
+    await logAction(
+      tab,
+      "type",
+      { selector, xpath, keys },
+      body?.targetType === "password" ? "[MASKED]" : text,
+      true,
+      "TYPE_SENT",
+      evidence
+    );
     return { ok: true, typed: text.length, keys };
   },
   async scroll(tabId, body) {
     const tab = getTabOrThrow(tabId);
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab)
+    };
     const deltaX = Number(body?.deltaX) || 0;
     const deltaY = Number(body?.deltaY) || 0;
     const selector = typeof body?.selector === "string" ? body.selector : void 0;
@@ -26149,9 +26319,18 @@ var vlmPageApi = {
     } else {
       const x = Number.isFinite(body?.x) ? Math.round(body.x) : 0;
       const y = Number.isFinite(body?.y) ? Math.round(body.y) : 0;
-      tab.view.webContents.sendInputEvent({ type: "mouseWheel", x, y, deltaX, deltaY });
+      tab.webContents.sendInputEvent({ type: "mouseWheel", x, y, deltaX, deltaY });
     }
-    logAction(tab, "scroll", { selector, xpath, x: body?.x, y: body?.y }, JSON.stringify({ deltaX, deltaY }), true, "SCROLL_SENT", {});
+    await sleep(100);
+    const evidence = await collectActionEvidence(tab, before, {
+      selector,
+      xpath,
+      x: body?.x,
+      y: body?.y,
+      deltaX,
+      deltaY
+    });
+    await logAction(tab, "scroll", { selector, xpath, x: body?.x, y: body?.y }, JSON.stringify({ deltaX, deltaY }), true, "SCROLL_SENT", evidence);
     return { ok: true, deltaX, deltaY };
   },
   async navigate(tabId, body) {
@@ -26160,14 +26339,21 @@ var vlmPageApi = {
       throw new Error("URL_REQUIRED");
     }
     const tab = getTabOrThrow(tabId);
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab)
+    };
     await tabManager.navigateTab(tabId, url);
-    logAction(tab, "navigate", { url }, url, true, "NAVIGATION_LOADED", { afterUrl: tab.view.webContents.getURL() });
-    return { ok: true, url: tab.view.webContents.getURL() };
+    const evidence = await collectActionEvidence(tab, before, { requestedUrl: url });
+    await logAction(tab, "navigate", { url }, url, true, "NAVIGATION_LOADED", evidence);
+    return { ok: true, url: tab.webContents.getURL() };
   },
   async wait(tabId, body) {
     const tab = getTabOrThrow(tabId);
     const selector = typeof body?.selector === "string" ? body.selector : "";
-    const until = typeof body?.until === "string" ? body.until : "present";
+    const allowedUntil = /* @__PURE__ */ new Set(["present", "absent", "visible", "hidden"]);
+    const requestedUntil = typeof body?.until === "string" ? body.until : "present";
+    const until = allowedUntil.has(requestedUntil) ? requestedUntil : "present";
     const timeoutMs = Math.max(100, Math.min(Number(body?.timeoutMs) || 5e3, 6e4));
     if (!selector) {
       throw new Error("SELECTOR_REQUIRED");
@@ -26197,8 +26383,13 @@ var vlmPageApi = {
     if (!script) {
       throw new Error("SCRIPT_REQUIRED");
     }
-    const result = await tab.view.webContents.executeJavaScript(script, true);
-    logAction(tab, "evaluate", null, script, true, "EVALUATE_COMPLETED", {});
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab)
+    };
+    const result = await tab.webContents.executeJavaScript(script, true);
+    const evidence = await collectActionEvidence(tab, before, {});
+    await logAction(tab, "evaluate", null, script, true, "EVALUATE_COMPLETED", evidence);
     return { ok: true, result };
   }
 };
@@ -26412,7 +26603,12 @@ function startApiServer(port = 3e3) {
     });
     app3.post("/api/tabs/:id/action/wait", async (req, res) => {
       try {
-        res.json(await vlmPageApi.wait(req.params.id, req.body || {}));
+        const result = await vlmPageApi.wait(req.params.id, req.body || {});
+        if (!result.ok && result.reason === "timeout") {
+          res.status(408).json(result);
+          return;
+        }
+        res.json(result);
       } catch (error) {
         errorResponse(res, error);
       }
@@ -26453,7 +26649,12 @@ function startApiServer(port = 3e3) {
           return;
         }
         if (actionType === "wait_for") {
-          res.json(await vlmPageApi.wait(tabId, req.body || {}));
+          const result = await vlmPageApi.wait(tabId, req.body || {});
+          if (!result.ok && result.reason === "timeout") {
+            res.status(408).json(result);
+            return;
+          }
+          res.json(result);
           return;
         }
         throw new Error("UNSUPPORTED_ACTION_TYPE");
@@ -26521,8 +26722,11 @@ function startApiServer(port = 3e3) {
             ${successExpr},
             ${reasonExpr},
             ${timestampExpr},
-            NULL AS before_dom_hash,
-            NULL AS after_dom_hash
+            COALESCE(before_url, '') AS before_url,
+            COALESCE(after_url, '') AS after_url,
+            COALESCE(before_dom_hash, '') AS before_dom_hash,
+            COALESCE(after_dom_hash, '') AS after_dom_hash,
+            COALESCE(evidence_json, '{}') AS evidence_json
           FROM actions
           WHERE profile_id = ?
           ORDER BY ${actionsColumns.includes("created_at") ? "created_at" : "id"} DESC
@@ -26634,8 +26838,9 @@ async function createWindow() {
   const isWindows = process.platform === "win32";
   const isMac = process.platform === "darwin";
   mainWindow = new import_electron.BrowserWindow({
-    width: 1400,
-    height: 900,
+    show: true,
+    width: 1280,
+    height: 800,
     minWidth: 1100,
     minHeight: 700,
     useContentSize: true,
@@ -26712,12 +26917,14 @@ import_electron.app.whenReady().then(async () => {
   const startupArgs = parseStartupArgs(process.argv.slice(1));
   const startupProfile = resolveStartupProfile(startupArgs);
   await startApiServer();
-  if (startupProfile && startupArgs.url) {
-    tabManager.createTabSync(startupProfile.id, startupArgs.url);
-  } else if (!startupArgs.noDefaultTab && tabManager.getAllTabs().length === 0) {
-    tabManager.createTabSync(startupProfile?.id || "default");
-  }
   await createWindow();
+  if (startupProfile && startupArgs.url) {
+    const tabId = tabManager.createTabSync(startupProfile.id, startupArgs.url);
+    tabManager.focusTab(tabId);
+  } else if (!startupArgs.noDefaultTab && tabManager.getAllTabs().length === 0) {
+    const tabId = tabManager.createTabSync(startupProfile?.id || "default");
+    tabManager.focusTab(tabId);
+  }
   console.log("Electron main process ready.");
 });
 import_electron.app.on("activate", async () => {
