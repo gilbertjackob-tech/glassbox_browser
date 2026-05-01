@@ -10,6 +10,7 @@
     "build": "vite build && esbuild src/main/main.ts src/preload/preload.ts --bundle --platform=node --outdir=dist-electron --format=cjs --out-extension:.js=.cjs --external:electron --external:better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "electron:dev": "node scripts/electron-dev.mjs",
+    "gb": "node scripts/glassbox-cli.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"

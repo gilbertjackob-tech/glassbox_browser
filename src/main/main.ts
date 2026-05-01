@@ -2,12 +2,65 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
 
 import { startApiServer } from './apiServer.js';
+import { profileStore } from './profileStore.js';
 import { tabManager } from '../server/tabManager.js';
 
 const DEV_APP_URL = 'http://127.0.0.1:5173';
 const PROD_APP_URL = 'http://127.0.0.1:3000';
 
 let mainWindow: BrowserWindow | null = null;
+
+interface StartupArgs {
+  profile?: string;
+  url?: string;
+  createProfile: boolean;
+  noDefaultTab: boolean;
+}
+
+function parseStartupArgs(argv: string[]): StartupArgs {
+  const args: StartupArgs = { createProfile: false, noDefaultTab: false };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const item = argv[index];
+    if (item === '--profile') {
+      args.profile = argv[index + 1];
+      index += 1;
+    } else if (item.startsWith('--profile=')) {
+      args.profile = item.slice('--profile='.length);
+    } else if (item === '--url') {
+      args.url = argv[index + 1];
+      index += 1;
+    } else if (item.startsWith('--url=')) {
+      args.url = item.slice('--url='.length);
+    } else if (item === '--create-profile') {
+      args.createProfile = true;
+    } else if (item === '--no-default-tab') {
+      args.noDefaultTab = true;
+    }
+  }
+
+  return args;
+}
+
+function resolveStartupProfile(args: StartupArgs) {
+  if (!args.profile) {
+    return profileStore.getActive() || profileStore.get('default');
+  }
+
+  const existing = profileStore.get(args.profile);
+  if (existing) {
+    profileStore.setActive(existing.id);
+    return existing;
+  }
+
+  if (args.createProfile) {
+    const created = profileStore.create(args.profile);
+    profileStore.setActive(created.id);
+    return created;
+  }
+
+  throw new Error(`Startup profile not found: ${args.profile}`);
+}
 
 async function createWindow() {
   const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
@@ -106,10 +159,15 @@ ipcMain.on('gb:heartbeat', (event, data) => {
 });
 
 app.whenReady().then(async () => {
+  const startupArgs = parseStartupArgs(process.argv.slice(1));
+  const startupProfile = resolveStartupProfile(startupArgs);
+
   await startApiServer();
 
-  if (tabManager.getAllTabs().length === 0) {
-    tabManager.createTabSync('default');
+  if (startupProfile && startupArgs.url) {
+    tabManager.createTabSync(startupProfile.id, startupArgs.url);
+  } else if (!startupArgs.noDefaultTab && tabManager.getAllTabs().length === 0) {
+    tabManager.createTabSync(startupProfile?.id || 'default');
   }
 
   await createWindow();
