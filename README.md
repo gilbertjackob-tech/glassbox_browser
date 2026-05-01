@@ -59,6 +59,26 @@ npm run gb -- type --tab <tabId> --sel "input[name='email']" --text "user@exampl
 Profiles are local-only and isolated by Electron persistent session partition. Existing old partition data is not auto-migrated.
 GlassBox profiles are Electron profiles, not real Chrome profiles. Login cookies and session data persist per GlassBox profile, but Chrome browser sync/import is not implemented.
 
+## Full Profile Backup
+GlassBox supports encrypted full profile backups using `.gbprofile` files.
+
+A full backup can include:
+- profile metadata
+- history
+- downloads metadata
+- saved GlassBox passwords
+- action logs
+- tabs metadata
+- Electron persistent session files where possible, including cookies/localStorage/IndexedDB/cache/service workers
+
+Backups are encrypted with a user-supplied password.
+
+Warning:
+- Full backups may contain login cookies and session tokens.
+- Anyone with the file and password may access logged-in accounts.
+- Some websites may still force re-login due to device, IP, 2FA, or risk checks.
+- This is not Chrome Sync. It restores GlassBox/Electron profile sessions.
+
 ## 📖 How it works
 1. **Open a Tab**: Launch an isolated BrowserView session.
 2. **Navigate**: Native Electron browsing with deep instrumentation.

@@ -147,6 +147,10 @@ export default function App() {
   const [editingProfileEmail, setEditingProfileEmail] = useState('');
   const [editingProfileBusy, setEditingProfileBusy] = useState(false);
   const [editingProfileError, setEditingProfileError] = useState<string | null>(null);
+  const [profileBackupOpen, setProfileBackupOpen] = useState(false);
+  const [backupPassword, setBackupPassword] = useState('');
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupError, setBackupError] = useState<string | null>(null);
   const [passwordForm, setPasswordForm] = useState({ origin: '', username: '', password: '' });
   const browserViewRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
@@ -413,6 +417,85 @@ export default function App() {
       setEditingProfileError(error?.message || 'Could not save profile.');
     } finally {
       setEditingProfileBusy(false);
+    }
+  };
+
+  const exportFullProfiles = async () => {
+    if (backupPassword.length < 8) {
+      setBackupError('Backup password must be at least 8 characters.');
+      return;
+    }
+
+    setBackupBusy(true);
+    setBackupError(null);
+
+    try {
+      const res = await fetch('/api/profiles/export-full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: backupPassword }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Export failed.');
+      }
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `glassbox-full-profile-backup-${new Date().toISOString().slice(0, 10)}.gbprofile`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      setBackupError(error?.message || 'Export failed.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const importFullProfiles = async (file: File) => {
+    if (!backupPassword) {
+      setBackupError('Enter backup password first.');
+      return;
+    }
+
+    setBackupBusy(true);
+    setBackupError(null);
+
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      const res = await fetch('/api/profiles/import-full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backup, password: backupPassword }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Import failed.');
+      }
+
+      await fetchProfiles();
+      await switchProfile(data.activeProfileId || 'default');
+
+      const restartNote = data.restartRecommended
+        ? ' Restart GlassBox to reload restored session files.'
+        : '';
+
+      alert(`Imported ${data.importedProfiles} profiles and restored ${data.restoredSessions} browser sessions.${restartNote}`);
+    } catch (error: any) {
+      setBackupError(error?.message || 'Import failed. Wrong password or corrupted file.');
+    } finally {
+      setBackupBusy(false);
     }
   };
 
@@ -1018,13 +1101,24 @@ export default function App() {
                   <span className="text-[10px] text-gb-text-dim">Active: {profiles.find((profile) => profile.id === activeProfileId)?.name || activeProfileId}</span>
                 </div>
                 <div className="rounded-md border border-gb-border bg-gb-bg p-2">
-                  <div className="mb-2">
+                  <div className="mb-2 grid gap-2">
                     <button
                       type="button"
                       onClick={openProfileCreator}
                       className="w-full rounded bg-gb-accent-primary px-3 py-1.5 text-[10px] font-semibold text-white"
                     >
                       Create new profile
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBackupPassword('');
+                        setBackupError(null);
+                        setProfileBackupOpen(true);
+                      }}
+                      className="w-full rounded-md border border-gb-border px-2 py-1.5 text-[10px] font-semibold text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text"
+                    >
+                      Backup / Restore
                     </button>
                   </div>
                   <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1">
@@ -1360,6 +1454,80 @@ export default function App() {
               >
                 {profileCreatorBusy ? 'Creating...' : 'Create profile'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {profileBackupOpen && (
+        <div className="border-t border-gb-border bg-black/60 px-4 py-5">
+          <div className="mx-auto w-full max-w-lg rounded-xl border border-gb-border bg-gb-surface p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-gb-text">Backup / Restore profiles</h2>
+                <p className="mt-1 text-xs text-gb-text-dim">
+                  Export or import full GlassBox profiles, including browser session files where possible.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setProfileBackupOpen(false)}
+                className="rounded-md p-1 text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text"
+                aria-label="Close backup dialog"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs leading-relaxed text-red-200">
+              This backup may contain login cookies and session tokens. Anyone with this file and password may access your logged-in accounts.
+              Some websites may still require re-login after restore due to device, IP, 2FA, or security checks.
+            </div>
+
+            <label className="mt-4 block text-[11px] font-semibold uppercase tracking-wide text-gb-text-dim">
+              Backup password
+            </label>
+
+            <input
+              type="password"
+              value={backupPassword}
+              onChange={(e) => setBackupPassword(e.target.value)}
+              placeholder="Minimum 8 characters"
+              className="mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+            />
+
+            {backupError && (
+              <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {backupError}
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={exportFullProfiles}
+                disabled={backupBusy}
+                className="rounded-md bg-gb-accent-primary px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {backupBusy ? 'Working...' : 'Export full backup'}
+              </button>
+
+              <label className="cursor-pointer rounded-md border border-gb-border px-3 py-2 text-xs font-semibold text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text">
+                Import full backup
+                <input
+                  type="file"
+                  accept=".gbprofile,application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      void importFullProfiles(file);
+                    }
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </label>
             </div>
           </div>
         </div>
