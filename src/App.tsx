@@ -134,7 +134,12 @@ export default function App() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [enabledPanels, setEnabledPanels] = useState<UtilityPanelId[]>(getInitialUtilityPanels);
-  const [newProfileName, setNewProfileName] = useState('');
+  const [profileCreatorOpen, setProfileCreatorOpen] = useState(false);
+  const [profileCreatorName, setProfileCreatorName] = useState('');
+  const [profileCreatorStartUrl, setProfileCreatorStartUrl] = useState('https://accounts.google.com/');
+  const [profileCreatorOpenLogin, setProfileCreatorOpenLogin] = useState(true);
+  const [profileCreatorError, setProfileCreatorError] = useState<string | null>(null);
+  const [profileCreatorBusy, setProfileCreatorBusy] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ origin: '', username: '', password: '' });
   const browserViewRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
@@ -285,20 +290,75 @@ export default function App() {
     }
   };
 
-  const createProfile = async (nameOverride?: string) => {
-    const name = (nameOverride ?? prompt('Enter new profile name:') ?? '').trim();
-    if (!name) return;
+  const openProfileCreator = () => {
+    setProfileCreatorName('');
+    setProfileCreatorStartUrl('https://accounts.google.com/');
+    setProfileCreatorOpenLogin(true);
+    setProfileCreatorError(null);
+    setProfileCreatorOpen(true);
+  };
 
-    const res = await fetch('/api/profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
+  const createProfile = async () => {
+    const name = profileCreatorName.trim();
 
-    const newProfile = await res.json();
-    await fetchProfiles();
-    setNewProfileName('');
-    await switchProfile(newProfile.id);
+    if (!name) {
+      setProfileCreatorError('Profile name is required.');
+      return;
+    }
+
+    setProfileCreatorBusy(true);
+    setProfileCreatorError(null);
+
+    try {
+      const createRes = await fetch('/api/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+
+      const newProfile = await createRes.json();
+
+      if (!createRes.ok || newProfile.error) {
+        throw new Error(newProfile.error || 'Failed to create profile.');
+      }
+
+      await fetchProfiles();
+
+      const startUrl = profileCreatorOpenLogin
+        ? profileCreatorStartUrl.trim() || 'https://accounts.google.com/'
+        : undefined;
+
+      const openRes = await fetch(`/api/profiles/${encodeURIComponent(newProfile.id)}/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: startUrl }),
+      });
+
+      const openData = await openRes.json();
+
+      if (!openRes.ok || openData.error) {
+        throw new Error(openData.error || 'Failed to open new profile.');
+      }
+
+      await persistActiveProfile(newProfile.id);
+      setActiveProfileId(newProfile.id);
+
+      await fetchTabs(newProfile.id, openData.tabId || openData.id);
+      setActiveTabId(openData.tabId || openData.id);
+
+      await fetchLogs(newProfile.id);
+      await fetchHistory('', newProfile.id);
+      await fetchDownloads('', newProfile.id);
+      await fetchPasswords(newProfile.id);
+
+      setProfileCreatorOpen(false);
+
+      requestAnimationFrame(() => syncBrowserViewBounds(openData.tabId || openData.id));
+    } catch (error: any) {
+      setProfileCreatorError(error?.message || 'Could not create profile.');
+    } finally {
+      setProfileCreatorBusy(false);
+    }
   };
 
   const renameProfile = async (profileId: string) => {
@@ -335,7 +395,9 @@ export default function App() {
     await fetchPasswords(profileId);
 
     if (filteredData.length === 0) {
-      await createTab(undefined, profileId);
+      const newTabId = await createTab(undefined, profileId);
+      setActiveTabId(newTabId);
+      requestAnimationFrame(() => syncBrowserViewBounds(newTabId));
       return;
     }
 
@@ -799,11 +861,14 @@ export default function App() {
               <select
                 value={activeProfileId}
                 onChange={(e) => {
-                  if (e.target.value === '__new__') {
-                    createProfile();
-                  } else {
-                    switchProfile(e.target.value);
+                  const value = e.target.value;
+
+                  if (value === '__new__') {
+                    openProfileCreator();
+                    return;
                   }
+
+                  switchProfile(value);
                 }}
                 className="min-w-0 cursor-pointer appearance-none truncate border-none bg-transparent pr-3 uppercase text-gb-text outline-none"
                 style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%228%22%20height%3D%225%22%20viewBox%3D%220%200%208%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M4%205L0%200H8L4%205Z%22%20fill%3D%22%2364748B%22/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center' }}
@@ -912,20 +977,13 @@ export default function App() {
                   <span className="text-[10px] text-gb-text-dim">Active: {profiles.find((profile) => profile.id === activeProfileId)?.name || activeProfileId}</span>
                 </div>
                 <div className="rounded-md border border-gb-border bg-gb-bg p-2">
-                  <div className="mb-2 flex gap-2">
-                    <input
-                      type="text"
-                      value={newProfileName}
-                      onChange={(e) => setNewProfileName(e.target.value)}
-                      placeholder="New profile name"
-                      className="min-w-0 flex-1 rounded border border-gb-border bg-gb-surface px-2 py-1.5 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
-                    />
+                  <div className="mb-2">
                     <button
                       type="button"
-                      onClick={() => createProfile(newProfileName)}
-                      className="shrink-0 rounded bg-gb-accent-primary px-3 py-1.5 text-[10px] font-semibold text-white"
+                      onClick={openProfileCreator}
+                      className="w-full rounded bg-gb-accent-primary px-3 py-1.5 text-[10px] font-semibold text-white"
                     >
-                      Add
+                      Create new profile
                     </button>
                   </div>
                   <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1">
@@ -1112,6 +1170,107 @@ export default function App() {
           </div>
         )}
       </header>
+
+      {profileCreatorOpen && (
+        <div className="border-t border-gb-border bg-black/60 px-4 py-5">
+          <div className="mx-auto w-full max-w-md rounded-xl border border-gb-border bg-gb-surface p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-gb-text">Create new profile</h2>
+                <p className="mt-1 text-xs text-gb-text-dim">
+                  Create an isolated browser profile with its own cookies, sessions, history, and saved data.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setProfileCreatorOpen(false)}
+                className="rounded-md p-1 text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text"
+                aria-label="Close profile creator"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-gb-text-dim">
+              Profile name
+            </label>
+            <input
+              autoFocus
+              value={profileCreatorName}
+              onChange={(e) => setProfileCreatorName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  createProfile();
+                }
+              }}
+              placeholder="Work, Personal, Fiverr, Research..."
+              className="mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+            />
+
+            <div className="mt-4 rounded-lg border border-gb-border bg-gb-bg p-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={profileCreatorOpenLogin}
+                  onChange={(e) => setProfileCreatorOpenLogin(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <div className="text-xs font-semibold text-gb-text">Open sign-in page after creation</div>
+                  <div className="mt-1 text-[11px] leading-relaxed text-gb-text-dim">
+                    This opens a login page inside the new isolated profile, like creating a new Chrome profile.
+                  </div>
+                </div>
+              </label>
+
+              {profileCreatorOpenLogin && (
+                <div className="mt-3">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wide text-gb-text-dim">
+                    Start URL
+                  </label>
+                  <input
+                    value={profileCreatorStartUrl}
+                    onChange={(e) => setProfileCreatorStartUrl(e.target.value)}
+                    placeholder="https://accounts.google.com/"
+                    className="mt-1 w-full rounded-md border border-gb-border bg-gb-surface px-2 py-1.5 text-xs text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-lg border border-gb-border bg-gb-bg p-3 text-[11px] leading-relaxed text-gb-text-dim">
+              <strong className="text-gb-text">Note:</strong> GlassBox creates an isolated Electron browser profile.
+              It can keep login cookies for future use, but it does not import or sync your real Chrome profile.
+            </div>
+
+            {profileCreatorError && (
+              <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {profileCreatorError}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setProfileCreatorOpen(false)}
+                className="rounded-md border border-gb-border px-3 py-2 text-xs font-semibold text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={createProfile}
+                disabled={profileCreatorBusy}
+                className="rounded-md bg-gb-accent-primary px-3 py-2 text-xs font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {profileCreatorBusy ? 'Creating...' : 'Create profile'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-black">
