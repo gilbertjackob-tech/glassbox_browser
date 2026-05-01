@@ -4,6 +4,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 import db from './memoryDb.js';
+import { exportFullProfileBackup, importFullProfileBackup } from './profileBackupService.js';
 import { profileStore } from './profileStore.js';
 import { memoryService } from '../server/memoryService.js';
 import { tabManager } from '../server/tabManager.js';
@@ -131,6 +132,28 @@ export function startApiServer(port: number = 3000): Promise<void> {
           // The window may not exist yet during startup-driven opens.
         }
         res.json({ success: true, id, tabId: id, profileId: profile.id });
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/profiles/export-full', async (req, res) => {
+      try {
+        const password = typeof req.body?.password === 'string' ? req.body.password : '';
+        const backup = await exportFullProfileBackup(password);
+        res.json(backup);
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/profiles/import-full', async (req, res) => {
+      try {
+        const password = typeof req.body?.password === 'string' ? req.body.password : '';
+        const backup = req.body?.backup;
+
+        const result = await importFullProfileBackup(backup, password);
+        res.json(result);
       } catch (error: any) {
         errorResponse(res, error);
       }
