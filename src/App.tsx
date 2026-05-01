@@ -977,6 +977,12 @@ export default function App() {
             {navError && <span className="ml-2 max-w-[150px] truncate text-[10px] text-red-400" title={navError}>{navError}</span>}
             {isNavigating && <RotateCw size={12} className="ml-2 animate-spin text-gb-accent-primary" />}
           </div>
+          
+          <button
+              onClick={navigate}
+              className="shrink-0 rounded bg-gb-accent-primary px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-blue-500" type="button">
+              Go
+          </button>
 
           <div className="flex min-w-0 shrink items-center gap-2 pr-1">
             <div className="flex min-w-0 max-w-[210px] shrink items-center rounded border border-gb-border bg-gb-surface-bright px-2 py-1 text-[9px] font-bold text-gb-text transition-colors focus-within:border-gb-accent-primary">
@@ -1021,12 +1027,7 @@ export default function App() {
               </select>
             </div>
 
-            <button
-              onClick={navigate}
-              className="shrink-0 rounded bg-gb-accent-primary px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-blue-500"
-            >
-              EXECUTE
-            </button>
+
 
             <div>
               <button
