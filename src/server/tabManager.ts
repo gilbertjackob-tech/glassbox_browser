@@ -1,4 +1,5 @@
 import db from '../main/memoryDb.js';
+import { profileStore } from '../main/profileStore.js';
 import { v4 as uuidv4 } from 'uuid';
 import { join } from 'path';
 import { createRequire } from 'module';
@@ -26,6 +27,8 @@ try {
       loadURL: async () => {},
       executeJavaScript: async () => {},
       insertText: () => {},
+      capturePage: async () => ({ toPNG: () => Buffer.from([]), getSize: () => ({ width: 0, height: 0 }) }),
+      sendInputEvent: () => {},
       removeAllListeners: () => {},
       isDestroyed: () => false,
       close: () => {},
@@ -33,10 +36,10 @@ try {
     setBounds() {}
     setAutoResize() {}
   };
-  session = { fromPartition: () => ({}) };
+  session = { fromPartition: () => ({ clearCache: async () => {}, clearStorageData: async () => {} }) };
 }
 
-interface TabMetadata {
+export interface TabMetadata {
   id: string;
   profileId: string;
   view: any; // BrowserView
@@ -61,9 +64,13 @@ class TabManager {
   }
 
   createTabSync(profileId: string = 'default', initialUrl: string = DEFAULT_LANDING_URL): string {
+    const profile = profileStore.get(profileId);
+    if (!profile) {
+      throw new Error('PROFILE_NOT_FOUND');
+    }
+
     const id = uuidv4();
-    const partition = `persist:gb_profile_${profileId}`;
-    const sess = session.fromPartition(partition);
+    const sess = session.fromPartition(profile.partition);
     const startUrl = initialUrl.trim() || DEFAULT_LANDING_URL;
 
     const view = new BrowserView({
@@ -77,7 +84,7 @@ class TabManager {
 
     const tab: TabMetadata = {
       id,
-      profileId,
+      profileId: profile.id,
       view,
       url: startUrl,
       title: startUrl === DEFAULT_LANDING_URL ? 'Bing' : 'New Tab',
@@ -89,7 +96,7 @@ class TabManager {
     db.prepare(`
       INSERT INTO tabs (id, profile_id, url, title)
       VALUES (?, ?, ?, ?)
-    `).run(id, profileId, tab.url, tab.title);
+    `).run(id, profile.id, tab.url, tab.title);
 
     this.tabs.set(id, tab);
 
@@ -99,19 +106,19 @@ class TabManager {
     // Sync metadata on navigation
     view.webContents.on('page-title-updated', (e, title) => {
       tab.title = title;
-      this.syncHistory(profileId, view.webContents.getURL(), title);
+      this.syncHistory(profile.id, view.webContents.getURL(), title);
       db.prepare('UPDATE tabs SET title = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(title, id);
     });
 
     view.webContents.on('did-navigate', (_, url) => {
       tab.url = url;
-      this.syncHistory(profileId, url, tab.title);
+      this.syncHistory(profile.id, url, tab.title);
       db.prepare('UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(url, id);
     });
 
     view.webContents.on('did-navigate-in-page', (_, url) => {
       tab.url = url;
-      this.syncHistory(profileId, url, tab.title);
+      this.syncHistory(profile.id, url, tab.title);
       db.prepare('UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(url, id);
     });
 
@@ -177,6 +184,21 @@ class TabManager {
     }
   }
 
+  focusTab(id: string) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error('TAB_NOT_FOUND');
+    }
+
+    this.setActiveTab(id, this.lastBounds);
+    return {
+      tabId: tab.id,
+      profileId: tab.profileId,
+      url: tab.url,
+      title: tab.title,
+    };
+  }
+
   async navigateTab(id: string, url: string) {
     const tab = this.tabs.get(id);
     if (!tab) {
@@ -206,6 +228,21 @@ class TabManager {
       title: t.title,
       domHash: t.domHash
     }));
+  }
+
+  async clearProfileStorage(partition: string) {
+    const sess = session.fromPartition(partition);
+    if (typeof sess.clearCache === 'function') {
+      await sess.clearCache();
+    }
+    if (typeof sess.clearStorageData === 'function') {
+      await sess.clearStorageData({
+        storages: ['cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage'],
+      });
+    }
+    if (sess.cookies && typeof sess.cookies.flushStore === 'function') {
+      await sess.cookies.flushStore();
+    }
   }
 
   handleHeartbeat(wc: any, data: { url?: string; title?: string; domHash?: string; snapshot?: any[] }) {

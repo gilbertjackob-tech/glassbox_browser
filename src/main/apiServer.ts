@@ -4,9 +4,10 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 import db from './memoryDb.js';
-import { actionExecutor } from '../server/actionExecutor.js';
+import { profileStore } from './profileStore.js';
 import { memoryService } from '../server/memoryService.js';
 import { tabManager } from '../server/tabManager.js';
+import { vlmPageApi } from '../server/vlmPageApi.js';
 
 function getTableColumns(tableName: string): string[] {
   try {
@@ -24,25 +25,17 @@ const downloadTimestampColumn = downloadColumns.includes('timestamp') ? 'timesta
 const actionsColumns = getTableColumns('actions');
 const actionLogsColumns = getTableColumns('action_logs');
 
-function getSettingValue(key: string, fallback: string) {
-  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value?: string } | undefined;
-  return row?.value || fallback;
-}
-
-function setSettingValue(key: string, value: string) {
-  db.prepare(`
-    INSERT INTO app_settings (key, value, updated_at)
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(key) DO UPDATE SET
-      value = excluded.value,
-      updated_at = CURRENT_TIMESTAMP
-  `).run(key, value);
-}
-
 function resolveProfileId(profileId: unknown) {
-  return typeof profileId === 'string' && profileId.trim().length > 0
-    ? profileId
-    : getSettingValue('active_profile_id', 'default');
+  return profileStore.resolveId(profileId);
+}
+
+function boolQuery(value: unknown, fallback: boolean) {
+  if (typeof value !== 'string') return fallback;
+  return !['0', 'false', 'no'].includes(value.toLowerCase());
+}
+
+function errorResponse(res: express.Response, error: any, status = 400) {
+  res.status(status).json({ error: error?.message || String(error) });
 }
 
 let serverPromise: Promise<void> | null = null;
@@ -59,92 +52,85 @@ export function startApiServer(port: number = 3000): Promise<void> {
     app.use(express.json());
 
     app.get('/api/profiles', (_req, res) => {
-      res.json(db.prepare('SELECT * FROM profiles ORDER BY created_at ASC').all());
+      res.json(profileStore.list());
     });
 
     app.get('/api/settings', (_req, res) => {
       res.json({
-        activeProfileId: getSettingValue('active_profile_id', 'default'),
+        activeProfileId: profileStore.getActiveId(),
       });
     });
 
     app.put('/api/settings', (req, res) => {
-      const activeProfileId = resolveProfileId(req.body?.activeProfileId);
-      const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(activeProfileId);
-
-      if (!profile) {
-        res.status(400).json({ error: 'Profile not found' });
-        return;
+      try {
+        const activeProfileId = req.body?.activeProfileId ?? req.body?.activeProfile;
+        const profile = profileStore.setActive(activeProfileId);
+        res.json({ success: true, activeProfileId: profile.id, profile });
+      } catch (error: any) {
+        errorResponse(res, error);
       }
-
-      setSettingValue('active_profile_id', activeProfileId);
-      res.json({ success: true, activeProfileId });
     });
 
     app.post('/api/profiles', (req, res) => {
-      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-      if (!name) {
-        res.status(400).json({ error: 'Name is required' });
-        return;
+      try {
+        const name = typeof req.body?.name === 'string' ? req.body.name : '';
+        const id = typeof req.body?.id === 'string' ? req.body.id : undefined;
+        const profile = profileStore.create(name, id);
+        res.json(profile);
+      } catch (error: any) {
+        errorResponse(res, error);
       }
-
-      const id = uuidv4();
-      db.prepare('INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)')
-        .run(id, name, `persist:profile-${id}`);
-
-      res.json({ id, name });
     });
 
     app.patch('/api/profiles/:id', (req, res) => {
-      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-      if (!name) {
-        res.status(400).json({ error: 'Name is required' });
-        return;
+      try {
+        const name = typeof req.body?.name === 'string' ? req.body.name : '';
+        const profile = profileStore.rename(req.params.id, name);
+        res.json({ success: true, ...profile });
+      } catch (error: any) {
+        errorResponse(res, error);
       }
-
-      const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(req.params.id);
-      if (!profile) {
-        res.status(404).json({ error: 'Profile not found' });
-        return;
-      }
-
-      db.prepare('UPDATE profiles SET name = ? WHERE id = ?').run(name, req.params.id);
-      res.json({ success: true, id: req.params.id, name });
     });
 
     app.delete('/api/profiles/:id', async (req, res) => {
-      const profileId = req.params.id;
-      if (profileId === 'default') {
-        res.status(400).json({ error: 'Default profile cannot be deleted' });
-        return;
+      try {
+        const profile = profileStore.get(req.params.id);
+        if (!profile) {
+          res.status(404).json({ error: 'PROFILE_NOT_FOUND' });
+          return;
+        }
+
+        const tabs = tabManager.getAllTabs().filter((tab) => tab.profileId === profile.id);
+        for (const tab of tabs) {
+          await tabManager.closeTab(tab.tabId);
+        }
+
+        const deleteStorage = boolQuery(req.query.deleteStorage, true);
+        if (deleteStorage) {
+          await tabManager.clearProfileStorage(profile.partition);
+        }
+
+        profileStore.delete(profile.id);
+        res.json({ success: true, activeProfileId: profileStore.getActiveId(), deletedStorage: deleteStorage });
+      } catch (error: any) {
+        errorResponse(res, error);
       }
+    });
 
-      const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(profileId);
-      if (!profile) {
-        res.status(404).json({ error: 'Profile not found' });
-        return;
+    app.post('/api/profiles/:id/open', (req, res) => {
+      try {
+        const profile = profileStore.setActive(req.params.id);
+        const initialUrl = typeof req.body?.url === 'string' ? req.body.url : undefined;
+        const id = tabManager.createTabSync(profile.id, initialUrl);
+        try {
+          tabManager.focusTab(id);
+        } catch {
+          // The window may not exist yet during startup-driven opens.
+        }
+        res.json({ success: true, id, tabId: id, profileId: profile.id });
+      } catch (error: any) {
+        errorResponse(res, error);
       }
-
-      const tabs = tabManager.getAllTabs().filter((tab) => tab.profileId === profileId);
-      for (const tab of tabs) {
-        await tabManager.closeTab(tab.tabId);
-      }
-
-      db.prepare('DELETE FROM profiles WHERE id = ?').run(profileId);
-      db.prepare('DELETE FROM tabs WHERE profile_id = ?').run(profileId);
-      db.prepare('DELETE FROM history WHERE profile_id = ?').run(profileId);
-      db.prepare('DELETE FROM downloads WHERE profile_id = ?').run(profileId);
-      db.prepare('DELETE FROM actions WHERE profile_id = ?').run(profileId);
-      db.prepare('DELETE FROM tasks WHERE profile_id = ?').run(profileId);
-      db.prepare('DELETE FROM skills WHERE profile_id = ?').run(profileId);
-      db.prepare('DELETE FROM dom_snapshots WHERE profile_id = ?').run(profileId);
-      db.prepare('DELETE FROM saved_passwords WHERE profile_id = ?').run(profileId);
-
-      if (getSettingValue('active_profile_id', 'default') === profileId) {
-        setSettingValue('active_profile_id', 'default');
-      }
-
-      res.json({ success: true, activeProfileId: getSettingValue('active_profile_id', 'default') });
     });
 
     app.get('/api/tabs', (_req, res) => {
@@ -152,10 +138,16 @@ export function startApiServer(port: number = 3000): Promise<void> {
     });
 
     app.post('/api/tabs', (req, res) => {
-      const profileId = typeof req.body?.profileId === 'string' ? req.body.profileId : 'default';
-      const initialUrl = typeof req.body?.initialUrl === 'string' ? req.body.initialUrl : undefined;
-      const id = tabManager.createTabSync(profileId, initialUrl);
-      res.json({ id });
+      try {
+        const profileId = resolveProfileId(req.body?.profileId);
+        const initialUrl = typeof req.body?.url === 'string'
+          ? req.body.url
+          : (typeof req.body?.initialUrl === 'string' ? req.body.initialUrl : undefined);
+        const id = tabManager.createTabSync(profileId, initialUrl);
+        res.json({ id, tabId: id, profileId });
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
     });
 
     app.delete('/api/tabs/:id', async (req, res) => {
@@ -163,15 +155,156 @@ export function startApiServer(port: number = 3000): Promise<void> {
       res.json({ success: true, nextActiveTabId: result.nextActiveTabId });
     });
 
+    app.put('/api/tabs/:id/focus', (req, res) => {
+      try {
+        res.json({ success: true, tab: tabManager.focusTab(req.params.id) });
+      } catch (error: any) {
+        errorResponse(res, error, 404);
+      }
+    });
+
     app.get('/api/tabs/:id/dom', (req, res) => {
       const tab = tabManager.getTab(req.params.id);
       res.json(tab?.elements || []);
     });
 
+    app.get('/api/tabs/:id/html', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.getHtml(req.params.id));
+      } catch (error: any) {
+        errorResponse(res, error, 404);
+      }
+    });
+
+    app.post('/api/tabs/:id/query', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.query(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.get('/api/tabs/:id/screenshot', async (req, res) => {
+      try {
+        const screenshot = await vlmPageApi.screenshot(req.params.id, {
+          selector: typeof req.query.selector === 'string' ? req.query.selector : undefined,
+          highlight: boolQuery(req.query.highlight, false),
+        });
+
+        if (req.query.format === 'json') {
+          res.json({
+            width: screenshot.width,
+            height: screenshot.height,
+            base64: screenshot.png.toString('base64'),
+          });
+          return;
+        }
+
+        res.type('png').send(screenshot.png);
+      } catch (error: any) {
+        errorResponse(res, error, 404);
+      }
+    });
+
+    app.post('/api/tabs/:id/style', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.style(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.get('/api/tabs/:id/a11y', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.a11y(req.params.id));
+      } catch (error: any) {
+        errorResponse(res, error, 404);
+      }
+    });
+
+    app.post('/api/tabs/:id/action/click', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.click(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/tabs/:id/action/type', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.type(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/tabs/:id/action/scroll', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.scroll(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/tabs/:id/action/navigate', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.navigate(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/tabs/:id/action/wait', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.wait(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/tabs/:id/action/evaluate', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.evaluate(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
     app.post('/api/actions', async (req, res) => {
       try {
-        const result = await actionExecutor.execute(req.body);
-        res.json(result);
+        const tabId = req.body?.tabId;
+        if (!tabId) {
+          throw new Error('TAB_REQUIRED');
+        }
+
+        const actionType = req.body?.actionType;
+        if (actionType === 'navigate') {
+          res.json(await vlmPageApi.navigate(tabId, { url: req.body?.input || req.body?.url }));
+          return;
+        }
+        if (actionType === 'click') {
+          res.json(await vlmPageApi.click(tabId, req.body?.target || req.body || {}));
+          return;
+        }
+        if (actionType === 'type') {
+          res.json(await vlmPageApi.type(tabId, {
+            ...(req.body?.target || {}),
+            text: req.body?.input ?? req.body?.text,
+            clearFirst: req.body?.clearFirst,
+            targetType: req.body?.target?.type,
+          }));
+          return;
+        }
+        if (actionType === 'scroll') {
+          res.json(await vlmPageApi.scroll(tabId, req.body || {}));
+          return;
+        }
+        if (actionType === 'wait_for') {
+          res.json(await vlmPageApi.wait(tabId, req.body || {}));
+          return;
+        }
+
+        throw new Error('UNSUPPORTED_ACTION_TYPE');
       } catch (error: any) {
         res.status(400).json({ error: error.message });
       }

@@ -108,11 +108,16 @@ export function initDb() {
     );
   `);
 
+  const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map((column: any) => column.name);
+  if (!profileColumns.includes('partition')) {
+    db.prepare('ALTER TABLE profiles ADD COLUMN partition TEXT').run();
+  }
+
   // Create default profile
   const defaultProfile = db.prepare('SELECT id FROM profiles WHERE id = ?').get('default');
   if (!defaultProfile) {
     db.prepare('INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)')
-      .run('default', 'Default', 'persist:profile-default');
+      .run('default', 'Default', 'persist:gb-profile-default');
   }
 
   const activeProfileSetting = db.prepare('SELECT key FROM app_settings WHERE key = ?').get('active_profile_id');

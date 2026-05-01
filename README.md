@@ -31,10 +31,31 @@ GlassBox uses a local SQLite database for persistent intelligence. No cloud or r
 
 ## 🛠️ API Endpoints
 - `GET /api/tabs`: List active browser tabs.
-- `POST /api/tabs`: Create a new tab in a profile.
+- `POST /api/tabs`: Create a new tab in a profile, with optional `{ profileId, url }`.
+- `PUT /api/tabs/:tabId/focus`: Bring a tab to the visible BrowserView.
 - `GET /api/tabs/:tabId/dom`: Get the latest GlassBox DOM snapshot.
+- `GET /api/tabs/:tabId/html`: Get the live page HTML from `document.documentElement.outerHTML`.
+- `POST /api/tabs/:tabId/query`: Query live elements by CSS selector or XPath with bounding boxes.
+- `GET /api/tabs/:tabId/screenshot`: Capture the visible page as PNG.
+- `POST /api/tabs/:tabId/style`: Read selected computed styles.
+- `GET /api/tabs/:tabId/a11y`: Get a lightweight semantic accessibility-style snapshot.
+- `POST /api/tabs/:tabId/action/*`: Click, type, scroll, navigate, wait, or evaluate in a tab.
 - `POST /api/actions`: Execute an **Action Contract**.
 - `GET /api/memory/search?q=...&profileId=...`: Unified memory search across history, tasks, skills, and downloads.
+
+## CLI Control
+Use the local CLI for profile-based automation:
+
+```powershell
+npm run gb -- profile list
+npm run gb -- profile create "Work" --id work
+npm run gb -- open --profile work --url https://example.com
+npm run gb -- query --tab <tabId> --sel "button"
+npm run gb -- click --tab <tabId> --sel "button.login"
+npm run gb -- type --tab <tabId> --sel "input[name='email']" --text "user@example.com"
+```
+
+Profiles are local-only and isolated by Electron persistent session partition. Existing old partition data is not auto-migrated.
 
 ## 📖 How it works
 1. **Open a Tab**: Launch an isolated BrowserView session.
@@ -48,4 +69,3 @@ Built with Native Electron, SQLite, React, and Tailwind.
 
 how to push?
 git add -A ; git commit -m "commit msg default" ; git push origin main
-

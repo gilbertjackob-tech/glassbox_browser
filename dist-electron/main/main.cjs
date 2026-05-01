@@ -25169,9 +25169,13 @@ function initDb() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  const profileColumns = db.prepare("PRAGMA table_info(profiles)").all().map((column) => column.name);
+  if (!profileColumns.includes("partition")) {
+    db.prepare("ALTER TABLE profiles ADD COLUMN partition TEXT").run();
+  }
   const defaultProfile = db.prepare("SELECT id FROM profiles WHERE id = ?").get("default");
   if (!defaultProfile) {
-    db.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run("default", "Default", "persist:profile-default");
+    db.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run("default", "Default", "persist:gb-profile-default");
   }
   const activeProfileSetting = db.prepare("SELECT key FROM app_settings WHERE key = ?").get("active_profile_id");
   if (!activeProfileSetting) {
@@ -25215,6 +25219,155 @@ var memory = {
 };
 var memoryDb_default = db;
 
+// src/main/profileStore.ts
+var ACTIVE_PROFILE_KEY = "active_profile_id";
+function slugify(value) {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "profile";
+}
+function getSettingValue(key, fallback) {
+  const row = memoryDb_default.prepare("SELECT value FROM app_settings WHERE key = ?").get(key);
+  return row?.value || fallback;
+}
+function setSettingValue(key, value) {
+  memoryDb_default.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(key, value);
+}
+function profilePartition(id) {
+  return `persist:gb-profile-${id}`;
+}
+var ProfileStore = class {
+  list() {
+    const profiles = memoryDb_default.prepare("SELECT * FROM profiles ORDER BY created_at ASC").all();
+    return profiles.map((profile) => this.ensurePartition(profile));
+  }
+  get(idOrName = "default") {
+    const key = idOrName.trim();
+    if (!key) {
+      return this.get(this.getActiveId());
+    }
+    const byId = memoryDb_default.prepare("SELECT * FROM profiles WHERE id = ?").get(key);
+    if (byId) {
+      return this.ensurePartition(byId);
+    }
+    const byName = memoryDb_default.prepare("SELECT * FROM profiles WHERE LOWER(name) = LOWER(?)").get(key);
+    return byName ? this.ensurePartition(byName) : null;
+  }
+  getActiveId() {
+    return getSettingValue(ACTIVE_PROFILE_KEY, "default");
+  }
+  getActive() {
+    return this.get(this.getActiveId()) || this.get("default");
+  }
+  setActive(idOrName) {
+    const profile = this.get(idOrName);
+    if (!profile) {
+      throw new Error("PROFILE_NOT_FOUND");
+    }
+    setSettingValue(ACTIVE_PROFILE_KEY, profile.id);
+    return profile;
+  }
+  create(name, requestedId) {
+    const cleanName = name.trim();
+    if (!cleanName) {
+      throw new Error("PROFILE_NAME_REQUIRED");
+    }
+    const id = requestedId?.trim() ? this.validateRequestedId(requestedId) : this.nextAvailableId(slugify(cleanName));
+    if (this.get(id)) {
+      throw new Error("PROFILE_ID_EXISTS");
+    }
+    const partition = profilePartition(id);
+    memoryDb_default.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run(id, cleanName, partition);
+    return this.get(id);
+  }
+  rename(idOrName, name) {
+    const profile = this.get(idOrName);
+    const cleanName = name.trim();
+    if (!profile) {
+      throw new Error("PROFILE_NOT_FOUND");
+    }
+    if (!cleanName) {
+      throw new Error("PROFILE_NAME_REQUIRED");
+    }
+    memoryDb_default.prepare("UPDATE profiles SET name = ? WHERE id = ?").run(cleanName, profile.id);
+    return this.get(profile.id);
+  }
+  delete(idOrName) {
+    const profile = this.get(idOrName);
+    if (!profile) {
+      throw new Error("PROFILE_NOT_FOUND");
+    }
+    if (profile.id === "default") {
+      throw new Error("DEFAULT_PROFILE_LOCKED");
+    }
+    const deleteTables = [
+      "profiles",
+      "tabs",
+      "history",
+      "downloads",
+      "actions",
+      "tasks",
+      "skills",
+      "dom_snapshots",
+      "saved_passwords"
+    ];
+    const transaction = memoryDb_default.transaction(() => {
+      for (const table of deleteTables) {
+        if (table === "profiles") {
+          memoryDb_default.prepare("DELETE FROM profiles WHERE id = ?").run(profile.id);
+        } else {
+          memoryDb_default.prepare(`DELETE FROM ${table} WHERE profile_id = ?`).run(profile.id);
+        }
+      }
+      if (this.getActiveId() === profile.id) {
+        setSettingValue(ACTIVE_PROFILE_KEY, "default");
+      }
+    });
+    transaction();
+    return profile;
+  }
+  resolveId(idOrName) {
+    if (typeof idOrName === "string" && idOrName.trim()) {
+      const profile = this.get(idOrName);
+      if (!profile) {
+        throw new Error("PROFILE_NOT_FOUND");
+      }
+      return profile.id;
+    }
+    return this.getActiveId();
+  }
+  ensurePartition(profile) {
+    if (profile.partition) {
+      return profile;
+    }
+    const partition = profilePartition(profile.id);
+    memoryDb_default.prepare("UPDATE profiles SET partition = ? WHERE id = ?").run(partition, profile.id);
+    return { ...profile, partition };
+  }
+  nextAvailableId(baseId) {
+    let candidate = baseId;
+    let suffix = 2;
+    while (memoryDb_default.prepare("SELECT id FROM profiles WHERE id = ?").get(candidate)) {
+      candidate = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    return candidate;
+  }
+  validateRequestedId(id) {
+    const slug = slugify(id);
+    if (slug !== id.trim().toLowerCase()) {
+      throw new Error("PROFILE_ID_MUST_BE_SLUG");
+    }
+    return slug;
+  }
+};
+var profileStore = new ProfileStore();
+
 // src/server/tabManager.ts
 var import_path2 = require("path");
 var import_module = require("module");
@@ -25245,6 +25398,9 @@ try {
         },
         insertText: () => {
         },
+        capturePage: async () => ({ toPNG: () => Buffer.from([]), getSize: () => ({ width: 0, height: 0 }) }),
+        sendInputEvent: () => {
+        },
         removeAllListeners: () => {
         },
         isDestroyed: () => false,
@@ -25257,7 +25413,9 @@ try {
     setAutoResize() {
     }
   };
-  session = { fromPartition: () => ({}) };
+  session = { fromPartition: () => ({ clearCache: async () => {
+  }, clearStorageData: async () => {
+  } }) };
 }
 var TabManager = class {
   constructor() {
@@ -25273,9 +25431,12 @@ var TabManager = class {
     return this.activeTabId;
   }
   createTabSync(profileId = "default", initialUrl = DEFAULT_LANDING_URL) {
+    const profile = profileStore.get(profileId);
+    if (!profile) {
+      throw new Error("PROFILE_NOT_FOUND");
+    }
     const id = v4_default();
-    const partition = `persist:gb_profile_${profileId}`;
-    const sess = session.fromPartition(partition);
+    const sess = session.fromPartition(profile.partition);
     const startUrl = initialUrl.trim() || DEFAULT_LANDING_URL;
     const view = new BrowserView({
       webPreferences: {
@@ -25287,7 +25448,7 @@ var TabManager = class {
     });
     const tab = {
       id,
-      profileId,
+      profileId: profile.id,
       view,
       url: startUrl,
       title: startUrl === DEFAULT_LANDING_URL ? "Bing" : "New Tab",
@@ -25297,23 +25458,23 @@ var TabManager = class {
     memoryDb_default.prepare(`
       INSERT INTO tabs (id, profile_id, url, title)
       VALUES (?, ?, ?, ?)
-    `).run(id, profileId, tab.url, tab.title);
+    `).run(id, profile.id, tab.url, tab.title);
     this.tabs.set(id, tab);
     view.webContents.on("did-start-loading", () => console.log("Loading started"));
     view.webContents.on("did-finish-load", () => console.log("Page loaded:", view.webContents.getURL()));
     view.webContents.on("page-title-updated", (e, title) => {
       tab.title = title;
-      this.syncHistory(profileId, view.webContents.getURL(), title);
+      this.syncHistory(profile.id, view.webContents.getURL(), title);
       memoryDb_default.prepare("UPDATE tabs SET title = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?").run(title, id);
     });
     view.webContents.on("did-navigate", (_, url) => {
       tab.url = url;
-      this.syncHistory(profileId, url, tab.title);
+      this.syncHistory(profile.id, url, tab.title);
       memoryDb_default.prepare("UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?").run(url, id);
     });
     view.webContents.on("did-navigate-in-page", (_, url) => {
       tab.url = url;
-      this.syncHistory(profileId, url, tab.title);
+      this.syncHistory(profile.id, url, tab.title);
       memoryDb_default.prepare("UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?").run(url, id);
     });
     void view.webContents.loadURL(startUrl).catch((error) => {
@@ -25365,6 +25526,19 @@ var TabManager = class {
       tab.view.setAutoResize({ width: true, height: true });
     }
   }
+  focusTab(id) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error("TAB_NOT_FOUND");
+    }
+    this.setActiveTab(id, this.lastBounds);
+    return {
+      tabId: tab.id,
+      profileId: tab.profileId,
+      url: tab.url,
+      title: tab.title
+    };
+  }
   async navigateTab(id, url) {
     const tab = this.tabs.get(id);
     if (!tab) {
@@ -25390,6 +25564,20 @@ var TabManager = class {
       title: t.title,
       domHash: t.domHash
     }));
+  }
+  async clearProfileStorage(partition) {
+    const sess = session.fromPartition(partition);
+    if (typeof sess.clearCache === "function") {
+      await sess.clearCache();
+    }
+    if (typeof sess.clearStorageData === "function") {
+      await sess.clearStorageData({
+        storages: ["cookies", "filesystem", "indexdb", "localstorage", "shadercache", "websql", "serviceworkers", "cachestorage"]
+      });
+    }
+    if (sess.cookies && typeof sess.cookies.flushStore === "function") {
+      await sess.cookies.flushStore();
+    }
   }
   handleHeartbeat(wc, data) {
     const tab = this.findTabByWebContents(wc);
@@ -25673,6 +25861,348 @@ var MemoryService = class {
 };
 var memoryService = new MemoryService();
 
+// src/server/vlmPageApi.ts
+function getTabOrThrow(tabId) {
+  const tab = tabManager.getTab(tabId);
+  if (!tab) {
+    throw new Error("TAB_NOT_FOUND");
+  }
+  return tab;
+}
+function pageScript(fn, args = []) {
+  return `(${fn.toString()})(...${JSON.stringify(args)})`;
+}
+async function runInPage(tab, fn, args = []) {
+  return await tab.view.webContents.executeJavaScript(pageScript(fn, args), true);
+}
+function logAction(tab, type, target, value, success, reason, evidence) {
+  try {
+    memoryDb_default.prepare(`
+      INSERT INTO actions (id, tab_id, profile_id, type, target, value, success, reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      v4_default(),
+      tab.id,
+      tab.profileId,
+      type,
+      target == null ? null : JSON.stringify(target),
+      value == null ? null : String(value),
+      success ? 1 : 0,
+      reason || JSON.stringify(evidence || {})
+    );
+  } catch (error) {
+    console.warn("Failed to log VLM action", error);
+  }
+}
+async function resolvePoint(tab, body) {
+  if (Number.isFinite(body?.x) && Number.isFinite(body?.y)) {
+    return { x: Math.round(body.x), y: Math.round(body.y) };
+  }
+  const selector = typeof body?.selector === "string" ? body.selector : void 0;
+  const xpath = typeof body?.xpath === "string" ? body.xpath : void 0;
+  if (!selector && !xpath) {
+    throw new Error("TARGET_REQUIRED");
+  }
+  const point = await runInPage(tab, (target) => {
+    function firstByXPath(expression) {
+      return document.evaluate(expression, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    }
+    const el = target.selector ? document.querySelector(target.selector) : firstByXPath(target.xpath || "");
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2)
+    };
+  }, [{ selector, xpath }]);
+  if (!point) {
+    throw new Error("ELEMENT_NOT_FOUND");
+  }
+  return { ...point, selector, xpath };
+}
+function keyForElectron(key) {
+  const aliases = {
+    Enter: "Enter",
+    Tab: "Tab",
+    Escape: "Escape",
+    Esc: "Escape",
+    Backspace: "Backspace",
+    Delete: "Delete",
+    ArrowUp: "Up",
+    ArrowDown: "Down",
+    ArrowLeft: "Left",
+    ArrowRight: "Right"
+  };
+  return aliases[key] || key;
+}
+var vlmPageApi = {
+  async getHtml(tabId) {
+    const tab = getTabOrThrow(tabId);
+    const html = await runInPage(tab, () => document.documentElement.outerHTML);
+    return {
+      tabId,
+      url: tab.view.webContents.getURL(),
+      title: tab.title,
+      html,
+      capturedAt: Date.now()
+    };
+  },
+  async query(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const selector = typeof body?.selector === "string" ? body.selector : "";
+    const xpath = typeof body?.xpath === "string" ? body.xpath : "";
+    const limit = Math.max(1, Math.min(Number(body?.limit) || 10, 200));
+    if (!selector && !xpath) {
+      throw new Error("SELECTOR_OR_XPATH_REQUIRED");
+    }
+    const elements = await runInPage(tab, (input) => {
+      function allByXPath(expression) {
+        const result = document.evaluate(expression, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        return Array.from({ length: Math.min(result.snapshotLength, input.limit) }, (_, index) => result.snapshotItem(index)).filter(Boolean);
+      }
+      const matches = input.selector ? Array.from(document.querySelectorAll(input.selector)).slice(0, input.limit) : allByXPath(input.xpath);
+      return matches.map((el, index) => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        const attrs = {};
+        for (const attr of Array.from(el.attributes || [])) {
+          attrs[attr.name] = attr.value;
+        }
+        const inputEl = el;
+        const visible = rect.width > 0 && rect.height > 0 && !el.hidden && style.display !== "none" && style.visibility !== "hidden";
+        const interactable = visible && !inputEl.disabled && !inputEl.readOnly && el.getAttribute("aria-disabled") !== "true" && style.pointerEvents !== "none";
+        return {
+          index,
+          tag: el.tagName,
+          text: (el.textContent || "").trim().slice(0, 500),
+          attributes: attrs,
+          bbox: {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height
+          },
+          visible,
+          interactable
+        };
+      });
+    }, [{ selector, xpath, limit }]);
+    return { selector: selector || void 0, xpath: xpath || void 0, count: elements.length, elements };
+  },
+  async screenshot(tabId, options) {
+    const tab = getTabOrThrow(tabId);
+    const selector = options.selector;
+    const highlight = options.highlight && selector;
+    if (highlight) {
+      await runInPage(tab, (targetSelector) => {
+        document.querySelectorAll('[data-gb-vlm-highlight="true"]').forEach((node) => node.remove());
+        document.querySelectorAll(targetSelector).forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) return;
+          const box = document.createElement("div");
+          box.setAttribute("data-gb-vlm-highlight", "true");
+          box.style.position = "fixed";
+          box.style.left = `${rect.left}px`;
+          box.style.top = `${rect.top}px`;
+          box.style.width = `${rect.width}px`;
+          box.style.height = `${rect.height}px`;
+          box.style.border = "3px solid #ff2d55";
+          box.style.background = "rgba(255, 45, 85, 0.12)";
+          box.style.zIndex = "2147483647";
+          box.style.pointerEvents = "none";
+          document.documentElement.appendChild(box);
+        });
+      }, [selector]);
+    }
+    try {
+      const image = await tab.view.webContents.capturePage();
+      const size = image.getSize();
+      return { png: image.toPNG(), width: size.width, height: size.height };
+    } finally {
+      if (highlight) {
+        await runInPage(tab, () => {
+          document.querySelectorAll('[data-gb-vlm-highlight="true"]').forEach((node) => node.remove());
+        }).catch(() => void 0);
+      }
+    }
+  },
+  async style(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const selector = typeof body?.selector === "string" ? body.selector : "";
+    const properties = Array.isArray(body?.properties) ? body.properties.filter((property) => typeof property === "string").slice(0, 100) : [];
+    if (!selector) {
+      throw new Error("SELECTOR_REQUIRED");
+    }
+    const elements = await runInPage(tab, (input) => {
+      return Array.from(document.querySelectorAll(input.selector)).slice(0, 100).map((el, index) => {
+        const computed = window.getComputedStyle(el);
+        const styles = {};
+        for (const property of input.properties) {
+          styles[property] = computed.getPropertyValue(property);
+        }
+        return { index, styles };
+      });
+    }, [{ selector, properties }]);
+    return { selector, elements };
+  },
+  async a11y(tabId) {
+    const tab = getTabOrThrow(tabId);
+    const tree = await runInPage(tab, () => {
+      function nameFor(el) {
+        return el.getAttribute("aria-label") || el.getAttribute("alt") || el.getAttribute("title") || el.placeholder || (el.textContent || "").trim().slice(0, 120);
+      }
+      function roleFor(el) {
+        if (el.getAttribute("role")) return el.getAttribute("role");
+        const tag = el.tagName.toLowerCase();
+        if (tag === "button") return "button";
+        if (tag === "a") return "link";
+        if (tag === "input" || tag === "textarea") return "textbox";
+        if (tag === "select") return "combobox";
+        if (/^h[1-6]$/.test(tag)) return "heading";
+        return tag;
+      }
+      const nodes = Array.from(document.querySelectorAll("button, a, input, textarea, select, [role], [aria-label], h1, h2, h3, h4, h5, h6")).slice(0, 500).map((el) => {
+        const rect = el.getBoundingClientRect();
+        return {
+          role: roleFor(el),
+          name: nameFor(el),
+          value: el.value || "",
+          focusable: typeof el.focus === "function",
+          bbox: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+        };
+      });
+      return { role: "rootWebArea", children: nodes };
+    });
+    return { tree };
+  },
+  async click(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const beforeUrl = tab.view.webContents.getURL();
+    const beforeDomHash = tab.domHash;
+    const point = await resolvePoint(tab, body);
+    tabManager.focusTab(tabId);
+    tab.view.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
+    tab.view.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    tab.view.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    const evidence = { beforeUrl, afterUrl: tab.view.webContents.getURL(), beforeDomHash, afterDomHash: tab.domHash, resolvedX: point.x, resolvedY: point.y };
+    logAction(tab, "click", point, null, true, "CLICK_SENT", evidence);
+    return { ok: true, resolvedX: point.x, resolvedY: point.y };
+  },
+  async type(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const text = typeof body?.text === "string" ? body.text : "";
+    const keys = Array.isArray(body?.keys) ? body.keys.filter((key) => typeof key === "string") : [];
+    if (!text && keys.length === 0) {
+      throw new Error("TEXT_OR_KEYS_REQUIRED");
+    }
+    const selector = typeof body?.selector === "string" ? body.selector : void 0;
+    const xpath = typeof body?.xpath === "string" ? body.xpath : void 0;
+    if (selector || xpath) {
+      const focused = await runInPage(tab, (input) => {
+        function firstByXPath(expression) {
+          return document.evaluate(expression, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        }
+        const el = input.selector ? document.querySelector(input.selector) : firstByXPath(input.xpath || "");
+        if (!el) return false;
+        el.focus();
+        if (input.clearFirst && typeof el.select === "function") {
+          el.select();
+          document.execCommand("delete");
+        }
+        return true;
+      }, [{ selector, xpath, clearFirst: Boolean(body?.clearFirst) }]);
+      if (!focused) {
+        throw new Error("ELEMENT_NOT_FOUND");
+      }
+    }
+    tabManager.focusTab(tabId);
+    for (const char of text) {
+      tab.view.webContents.sendInputEvent({ type: "char", keyCode: char });
+    }
+    for (const key of keys) {
+      const keyCode = keyForElectron(key);
+      tab.view.webContents.sendInputEvent({ type: "keyDown", keyCode });
+      tab.view.webContents.sendInputEvent({ type: "keyUp", keyCode });
+    }
+    logAction(tab, "type", { selector, xpath, keys }, body?.targetType === "password" ? "[MASKED]" : text, true, "TYPE_SENT", {});
+    return { ok: true, typed: text.length, keys };
+  },
+  async scroll(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const deltaX = Number(body?.deltaX) || 0;
+    const deltaY = Number(body?.deltaY) || 0;
+    const selector = typeof body?.selector === "string" ? body.selector : void 0;
+    const xpath = typeof body?.xpath === "string" ? body.xpath : void 0;
+    if (selector || xpath) {
+      const scrolled = await runInPage(tab, (input) => {
+        function firstByXPath(expression) {
+          return document.evaluate(expression, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        }
+        const el = input.selector ? document.querySelector(input.selector) : firstByXPath(input.xpath || "");
+        if (!el) return false;
+        el.dispatchEvent(new WheelEvent("wheel", { deltaX: input.deltaX, deltaY: input.deltaY, bubbles: true, cancelable: true }));
+        el.scrollBy?.(input.deltaX, input.deltaY);
+        return true;
+      }, [{ selector, xpath, deltaX, deltaY }]);
+      if (!scrolled) throw new Error("ELEMENT_NOT_FOUND");
+    } else {
+      const x = Number.isFinite(body?.x) ? Math.round(body.x) : 0;
+      const y = Number.isFinite(body?.y) ? Math.round(body.y) : 0;
+      tab.view.webContents.sendInputEvent({ type: "mouseWheel", x, y, deltaX, deltaY });
+    }
+    logAction(tab, "scroll", { selector, xpath, x: body?.x, y: body?.y }, JSON.stringify({ deltaX, deltaY }), true, "SCROLL_SENT", {});
+    return { ok: true, deltaX, deltaY };
+  },
+  async navigate(tabId, body) {
+    const url = typeof body?.url === "string" ? normalizeUrl(body.url) : "";
+    if (!url) {
+      throw new Error("URL_REQUIRED");
+    }
+    const tab = getTabOrThrow(tabId);
+    await tabManager.navigateTab(tabId, url);
+    logAction(tab, "navigate", { url }, url, true, "NAVIGATION_LOADED", { afterUrl: tab.view.webContents.getURL() });
+    return { ok: true, url: tab.view.webContents.getURL() };
+  },
+  async wait(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const selector = typeof body?.selector === "string" ? body.selector : "";
+    const until = typeof body?.until === "string" ? body.until : "present";
+    const timeoutMs = Math.max(100, Math.min(Number(body?.timeoutMs) || 5e3, 6e4));
+    if (!selector) {
+      throw new Error("SELECTOR_REQUIRED");
+    }
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const state = await runInPage(tab, (targetSelector) => {
+        const elements = Array.from(document.querySelectorAll(targetSelector));
+        const visible = elements.some((el) => {
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        });
+        return { count: elements.length, visible };
+      }, [selector]);
+      const done = until === "absent" ? state.count === 0 : until === "visible" ? state.visible : until === "hidden" ? !state.visible : state.count > 0;
+      if (done) {
+        return { ok: true, elapsedMs: Date.now() - started };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    return { ok: false, reason: "timeout", elapsedMs: Date.now() - started };
+  },
+  async evaluate(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const script = typeof body?.script === "string" ? body.script : "";
+    if (!script) {
+      throw new Error("SCRIPT_REQUIRED");
+    }
+    const result = await tab.view.webContents.executeJavaScript(script, true);
+    logAction(tab, "evaluate", null, script, true, "EVALUATE_COMPLETED", {});
+    return { ok: true, result };
+  }
+};
+
 // src/main/apiServer.ts
 function getTableColumns(tableName) {
   try {
@@ -25687,21 +26217,15 @@ var downloadUrlColumn = downloadColumns.includes("url") ? "url" : null;
 var downloadTimestampColumn = downloadColumns.includes("timestamp") ? "timestamp" : downloadColumns.includes("created_at") ? "created_at" : null;
 var actionsColumns = getTableColumns("actions");
 var actionLogsColumns = getTableColumns("action_logs");
-function getSettingValue(key, fallback) {
-  const row = memoryDb_default.prepare("SELECT value FROM app_settings WHERE key = ?").get(key);
-  return row?.value || fallback;
-}
-function setSettingValue(key, value) {
-  memoryDb_default.prepare(`
-    INSERT INTO app_settings (key, value, updated_at)
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(key) DO UPDATE SET
-      value = excluded.value,
-      updated_at = CURRENT_TIMESTAMP
-  `).run(key, value);
-}
 function resolveProfileId(profileId) {
-  return typeof profileId === "string" && profileId.trim().length > 0 ? profileId : getSettingValue("active_profile_id", "default");
+  return profileStore.resolveId(profileId);
+}
+function boolQuery(value, fallback) {
+  if (typeof value !== "string") return fallback;
+  return !["0", "false", "no"].includes(value.toLowerCase());
+}
+function errorResponse(res, error, status = 400) {
+  res.status(status).json({ error: error?.message || String(error) });
 }
 var serverPromise = null;
 function startApiServer(port = 3e3) {
@@ -25713,97 +26237,226 @@ function startApiServer(port = 3e3) {
     app3.use((0, import_cors.default)());
     app3.use(import_express.default.json());
     app3.get("/api/profiles", (_req, res) => {
-      res.json(memoryDb_default.prepare("SELECT * FROM profiles ORDER BY created_at ASC").all());
+      res.json(profileStore.list());
     });
     app3.get("/api/settings", (_req, res) => {
       res.json({
-        activeProfileId: getSettingValue("active_profile_id", "default")
+        activeProfileId: profileStore.getActiveId()
       });
     });
     app3.put("/api/settings", (req, res) => {
-      const activeProfileId = resolveProfileId(req.body?.activeProfileId);
-      const profile = memoryDb_default.prepare("SELECT id FROM profiles WHERE id = ?").get(activeProfileId);
-      if (!profile) {
-        res.status(400).json({ error: "Profile not found" });
-        return;
+      try {
+        const activeProfileId = req.body?.activeProfileId ?? req.body?.activeProfile;
+        const profile = profileStore.setActive(activeProfileId);
+        res.json({ success: true, activeProfileId: profile.id, profile });
+      } catch (error) {
+        errorResponse(res, error);
       }
-      setSettingValue("active_profile_id", activeProfileId);
-      res.json({ success: true, activeProfileId });
     });
     app3.post("/api/profiles", (req, res) => {
-      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
-      if (!name) {
-        res.status(400).json({ error: "Name is required" });
-        return;
+      try {
+        const name = typeof req.body?.name === "string" ? req.body.name : "";
+        const id = typeof req.body?.id === "string" ? req.body.id : void 0;
+        const profile = profileStore.create(name, id);
+        res.json(profile);
+      } catch (error) {
+        errorResponse(res, error);
       }
-      const id = v4_default();
-      memoryDb_default.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run(id, name, `persist:profile-${id}`);
-      res.json({ id, name });
     });
     app3.patch("/api/profiles/:id", (req, res) => {
-      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
-      if (!name) {
-        res.status(400).json({ error: "Name is required" });
-        return;
+      try {
+        const name = typeof req.body?.name === "string" ? req.body.name : "";
+        const profile = profileStore.rename(req.params.id, name);
+        res.json({ success: true, ...profile });
+      } catch (error) {
+        errorResponse(res, error);
       }
-      const profile = memoryDb_default.prepare("SELECT id FROM profiles WHERE id = ?").get(req.params.id);
-      if (!profile) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
-      }
-      memoryDb_default.prepare("UPDATE profiles SET name = ? WHERE id = ?").run(name, req.params.id);
-      res.json({ success: true, id: req.params.id, name });
     });
     app3.delete("/api/profiles/:id", async (req, res) => {
-      const profileId = req.params.id;
-      if (profileId === "default") {
-        res.status(400).json({ error: "Default profile cannot be deleted" });
-        return;
+      try {
+        const profile = profileStore.get(req.params.id);
+        if (!profile) {
+          res.status(404).json({ error: "PROFILE_NOT_FOUND" });
+          return;
+        }
+        const tabs = tabManager.getAllTabs().filter((tab) => tab.profileId === profile.id);
+        for (const tab of tabs) {
+          await tabManager.closeTab(tab.tabId);
+        }
+        const deleteStorage = boolQuery(req.query.deleteStorage, true);
+        if (deleteStorage) {
+          await tabManager.clearProfileStorage(profile.partition);
+        }
+        profileStore.delete(profile.id);
+        res.json({ success: true, activeProfileId: profileStore.getActiveId(), deletedStorage: deleteStorage });
+      } catch (error) {
+        errorResponse(res, error);
       }
-      const profile = memoryDb_default.prepare("SELECT id FROM profiles WHERE id = ?").get(profileId);
-      if (!profile) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
+    });
+    app3.post("/api/profiles/:id/open", (req, res) => {
+      try {
+        const profile = profileStore.setActive(req.params.id);
+        const initialUrl = typeof req.body?.url === "string" ? req.body.url : void 0;
+        const id = tabManager.createTabSync(profile.id, initialUrl);
+        try {
+          tabManager.focusTab(id);
+        } catch {
+        }
+        res.json({ success: true, id, tabId: id, profileId: profile.id });
+      } catch (error) {
+        errorResponse(res, error);
       }
-      const tabs = tabManager.getAllTabs().filter((tab) => tab.profileId === profileId);
-      for (const tab of tabs) {
-        await tabManager.closeTab(tab.tabId);
-      }
-      memoryDb_default.prepare("DELETE FROM profiles WHERE id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM tabs WHERE profile_id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM history WHERE profile_id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM downloads WHERE profile_id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM actions WHERE profile_id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM tasks WHERE profile_id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM skills WHERE profile_id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM dom_snapshots WHERE profile_id = ?").run(profileId);
-      memoryDb_default.prepare("DELETE FROM saved_passwords WHERE profile_id = ?").run(profileId);
-      if (getSettingValue("active_profile_id", "default") === profileId) {
-        setSettingValue("active_profile_id", "default");
-      }
-      res.json({ success: true, activeProfileId: getSettingValue("active_profile_id", "default") });
     });
     app3.get("/api/tabs", (_req, res) => {
       res.json(tabManager.getAllTabs());
     });
     app3.post("/api/tabs", (req, res) => {
-      const profileId = typeof req.body?.profileId === "string" ? req.body.profileId : "default";
-      const initialUrl = typeof req.body?.initialUrl === "string" ? req.body.initialUrl : void 0;
-      const id = tabManager.createTabSync(profileId, initialUrl);
-      res.json({ id });
+      try {
+        const profileId = resolveProfileId(req.body?.profileId);
+        const initialUrl = typeof req.body?.url === "string" ? req.body.url : typeof req.body?.initialUrl === "string" ? req.body.initialUrl : void 0;
+        const id = tabManager.createTabSync(profileId, initialUrl);
+        res.json({ id, tabId: id, profileId });
+      } catch (error) {
+        errorResponse(res, error);
+      }
     });
     app3.delete("/api/tabs/:id", async (req, res) => {
       const result = await tabManager.closeTab(req.params.id);
       res.json({ success: true, nextActiveTabId: result.nextActiveTabId });
     });
+    app3.put("/api/tabs/:id/focus", (req, res) => {
+      try {
+        res.json({ success: true, tab: tabManager.focusTab(req.params.id) });
+      } catch (error) {
+        errorResponse(res, error, 404);
+      }
+    });
     app3.get("/api/tabs/:id/dom", (req, res) => {
       const tab = tabManager.getTab(req.params.id);
       res.json(tab?.elements || []);
     });
+    app3.get("/api/tabs/:id/html", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.getHtml(req.params.id));
+      } catch (error) {
+        errorResponse(res, error, 404);
+      }
+    });
+    app3.post("/api/tabs/:id/query", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.query(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app3.get("/api/tabs/:id/screenshot", async (req, res) => {
+      try {
+        const screenshot = await vlmPageApi.screenshot(req.params.id, {
+          selector: typeof req.query.selector === "string" ? req.query.selector : void 0,
+          highlight: boolQuery(req.query.highlight, false)
+        });
+        if (req.query.format === "json") {
+          res.json({
+            width: screenshot.width,
+            height: screenshot.height,
+            base64: screenshot.png.toString("base64")
+          });
+          return;
+        }
+        res.type("png").send(screenshot.png);
+      } catch (error) {
+        errorResponse(res, error, 404);
+      }
+    });
+    app3.post("/api/tabs/:id/style", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.style(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app3.get("/api/tabs/:id/a11y", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.a11y(req.params.id));
+      } catch (error) {
+        errorResponse(res, error, 404);
+      }
+    });
+    app3.post("/api/tabs/:id/action/click", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.click(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app3.post("/api/tabs/:id/action/type", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.type(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app3.post("/api/tabs/:id/action/scroll", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.scroll(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app3.post("/api/tabs/:id/action/navigate", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.navigate(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app3.post("/api/tabs/:id/action/wait", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.wait(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app3.post("/api/tabs/:id/action/evaluate", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.evaluate(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
     app3.post("/api/actions", async (req, res) => {
       try {
-        const result = await actionExecutor.execute(req.body);
-        res.json(result);
+        const tabId = req.body?.tabId;
+        if (!tabId) {
+          throw new Error("TAB_REQUIRED");
+        }
+        const actionType = req.body?.actionType;
+        if (actionType === "navigate") {
+          res.json(await vlmPageApi.navigate(tabId, { url: req.body?.input || req.body?.url }));
+          return;
+        }
+        if (actionType === "click") {
+          res.json(await vlmPageApi.click(tabId, req.body?.target || req.body || {}));
+          return;
+        }
+        if (actionType === "type") {
+          res.json(await vlmPageApi.type(tabId, {
+            ...req.body?.target || {},
+            text: req.body?.input ?? req.body?.text,
+            clearFirst: req.body?.clearFirst,
+            targetType: req.body?.target?.type
+          }));
+          return;
+        }
+        if (actionType === "scroll") {
+          res.json(await vlmPageApi.scroll(tabId, req.body || {}));
+          return;
+        }
+        if (actionType === "wait_for") {
+          res.json(await vlmPageApi.wait(tabId, req.body || {}));
+          return;
+        }
+        throw new Error("UNSUPPORTED_ACTION_TYPE");
       } catch (error) {
         res.status(400).json({ error: error.message });
       }
@@ -25938,6 +26591,44 @@ function startApiServer(port = 3e3) {
 var DEV_APP_URL = "http://127.0.0.1:5173";
 var PROD_APP_URL = "http://127.0.0.1:3000";
 var mainWindow = null;
+function parseStartupArgs(argv) {
+  const args = { createProfile: false, noDefaultTab: false };
+  for (let index = 0; index < argv.length; index += 1) {
+    const item = argv[index];
+    if (item === "--profile") {
+      args.profile = argv[index + 1];
+      index += 1;
+    } else if (item.startsWith("--profile=")) {
+      args.profile = item.slice("--profile=".length);
+    } else if (item === "--url") {
+      args.url = argv[index + 1];
+      index += 1;
+    } else if (item.startsWith("--url=")) {
+      args.url = item.slice("--url=".length);
+    } else if (item === "--create-profile") {
+      args.createProfile = true;
+    } else if (item === "--no-default-tab") {
+      args.noDefaultTab = true;
+    }
+  }
+  return args;
+}
+function resolveStartupProfile(args) {
+  if (!args.profile) {
+    return profileStore.getActive() || profileStore.get("default");
+  }
+  const existing = profileStore.get(args.profile);
+  if (existing) {
+    profileStore.setActive(existing.id);
+    return existing;
+  }
+  if (args.createProfile) {
+    const created = profileStore.create(args.profile);
+    profileStore.setActive(created.id);
+    return created;
+  }
+  throw new Error(`Startup profile not found: ${args.profile}`);
+}
 async function createWindow() {
   const isDev = !import_electron.app.isPackaged && process.env.NODE_ENV === "development";
   const isWindows = process.platform === "win32";
@@ -26018,9 +26709,13 @@ import_electron.ipcMain.on("gb:heartbeat", (event, data) => {
   tabManager.handleHeartbeat(event.sender, data || {});
 });
 import_electron.app.whenReady().then(async () => {
+  const startupArgs = parseStartupArgs(process.argv.slice(1));
+  const startupProfile = resolveStartupProfile(startupArgs);
   await startApiServer();
-  if (tabManager.getAllTabs().length === 0) {
-    tabManager.createTabSync("default");
+  if (startupProfile && startupArgs.url) {
+    tabManager.createTabSync(startupProfile.id, startupArgs.url);
+  } else if (!startupArgs.noDefaultTab && tabManager.getAllTabs().length === 0) {
+    tabManager.createTabSync(startupProfile?.id || "default");
   }
   await createWindow();
   console.log("Electron main process ready.");
