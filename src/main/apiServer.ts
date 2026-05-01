@@ -76,7 +76,16 @@ export function startApiServer(port: number = 3000): Promise<void> {
       try {
         const name = typeof req.body?.name === 'string' ? req.body.name : '';
         const id = typeof req.body?.id === 'string' ? req.body.id : undefined;
-        const email = typeof req.body?.email === 'string' ? req.body.email : undefined;
+        const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          res.status(400).json({
+            error: 'INVALID_EMAIL',
+            message: 'Enter a valid email address.',
+          });
+          return;
+        }
+
         const profile = profileStore.create(name, id, email);
         res.json(profile);
       } catch (error: any) {
@@ -88,9 +97,157 @@ export function startApiServer(port: number = 3000): Promise<void> {
       try {
         const profile = profileStore.update(req.params.id, {
           name: typeof req.body?.name === 'string' ? req.body.name : undefined,
-          email: typeof req.body?.email === 'string' ? req.body.email : undefined,
         });
         res.json({ success: true, ...profile });
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/profiles/:id/detect-email', async (req, res) => {
+      try {
+        const profile = profileStore.get(req.params.id);
+        if (!profile) {
+          res.status(404).json({ error: 'PROFILE_NOT_FOUND' });
+          return;
+        }
+
+        if (profile.id === 'default') {
+          res.json({
+            success: false,
+            reason: 'DEFAULT_PROFILE_EMAIL_OPTIONAL',
+            email: null,
+          });
+          return;
+        }
+
+        const profileTabs = tabManager
+          .getAllTabs()
+          .filter((tab) => tab.profileId === profile.id);
+
+        if (profileTabs.length === 0) {
+          res.json({
+            success: false,
+            reason: 'NO_PROFILE_TAB',
+            email: null,
+          });
+          return;
+        }
+
+        const activeTabId = tabManager.getActiveTabId?.();
+        const selectedTab =
+          profileTabs.find((tab) => tab.tabId === activeTabId) ||
+          profileTabs.find((tab) => {
+            try {
+              const detectedHost = new URL(tab.url).hostname.toLowerCase();
+              return detectedHost === 'mail.google.com' ||
+                detectedHost === 'accounts.google.com' ||
+                detectedHost === 'myaccount.google.com' ||
+                detectedHost === 'www.google.com' ||
+                detectedHost === 'google.com';
+            } catch {
+              return false;
+            }
+          }) ||
+          profileTabs[0];
+
+        const tab = tabManager.getTab(selectedTab.tabId);
+        if (!tab) {
+          res.json({
+            success: false,
+            reason: 'TAB_NOT_FOUND',
+            email: null,
+          });
+          return;
+        }
+
+        const currentUrl = tab.webContents.getURL();
+        let host = '';
+
+        try {
+          host = new URL(currentUrl).hostname.toLowerCase();
+        } catch {
+          host = '';
+        }
+
+        const trustedGoogleHosts = new Set([
+          'accounts.google.com',
+          'myaccount.google.com',
+          'mail.google.com',
+          'www.google.com',
+          'google.com',
+        ]);
+
+        if (!trustedGoogleHosts.has(host)) {
+          res.json({
+            success: false,
+            reason: 'NOT_GOOGLE_IDENTITY_PAGE',
+            url: currentUrl,
+            email: null,
+          });
+          return;
+        }
+
+        const email = await tab.webContents.executeJavaScript(`
+          (() => {
+            const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig;
+
+            const candidates = new Set();
+
+            const add = (value) => {
+              if (!value || typeof value !== 'string') return;
+              const matches = value.match(emailRegex);
+              if (!matches) return;
+              for (const match of matches) {
+                candidates.add(match.toLowerCase());
+              }
+            };
+
+            add(document.body?.innerText || '');
+            add(document.title || '');
+
+            for (const el of Array.from(document.querySelectorAll('[aria-label], [title], [data-email], [href], [email]'))) {
+              add(el.getAttribute('aria-label'));
+              add(el.getAttribute('title'));
+              add(el.getAttribute('data-email'));
+              add(el.getAttribute('email'));
+              add(el.getAttribute('href'));
+              add(el.textContent || '');
+            }
+
+            for (const script of Array.from(document.scripts || [])) {
+              add(script.textContent || '');
+            }
+
+            const list = Array.from(candidates);
+
+            const preferred = list.find((detectedEmail) =>
+              detectedEmail.endsWith('@gmail.com') ||
+              detectedEmail.endsWith('@googlemail.com')
+            );
+
+            return preferred || list[0] || null;
+          })();
+        `, true);
+
+        if (!email || typeof email !== 'string') {
+          res.json({
+            success: false,
+            reason: 'EMAIL_NOT_FOUND_ON_PAGE',
+            url: currentUrl,
+            email: null,
+          });
+          return;
+        }
+
+        const updated = profileStore.setEmail(profile.id, email);
+
+        res.json({
+          success: true,
+          email,
+          profile: updated,
+          sourceUrl: currentUrl,
+        });
       } catch (error: any) {
         errorResponse(res, error);
       }

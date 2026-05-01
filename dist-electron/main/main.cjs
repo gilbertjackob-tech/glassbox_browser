@@ -1635,8 +1635,8 @@ var require_node = __commonJS({
           }
           break;
         case "FILE":
-          var fs = require("fs");
-          stream2 = new fs.SyncWriteStream(fd2, { autoClose: false });
+          var fs2 = require("fs");
+          stream2 = new fs2.SyncWriteStream(fd2, { autoClose: false });
           stream2._type = "fs";
           break;
         case "PIPE":
@@ -14423,11 +14423,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path2) {
-      if (!path2 || typeof path2 !== "string") {
+    function lookup(path3) {
+      if (!path3 || typeof path3 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path2).toLowerCase().substr(1);
+      var extension2 = extname("x." + path3).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -17982,8 +17982,8 @@ var require_node2 = __commonJS({
           }
           break;
         case "FILE":
-          var fs = require("fs");
-          stream2 = new fs.SyncWriteStream(fd2, { autoClose: false });
+          var fs2 = require("fs");
+          stream2 = new fs2.SyncWriteStream(fd2, { autoClose: false });
           stream2._type = "fs";
           break;
         case "PIPE":
@@ -18701,8 +18701,8 @@ var require_node3 = __commonJS({
           }
           break;
         case "FILE":
-          var fs = require("fs");
-          stream2 = new fs.SyncWriteStream(fd2, { autoClose: false });
+          var fs2 = require("fs");
+          stream2 = new fs2.SyncWriteStream(fd2, { autoClose: false });
           stream2._type = "fs";
           break;
         case "PIPE":
@@ -18790,7 +18790,7 @@ var require_path_to_regexp = __commonJS({
   "node_modules/path-to-regexp/index.js"(exports2, module2) {
     module2.exports = pathToRegexp;
     var MATCHING_GROUP_REGEXP = /\\.|\((?:\?<(.*?)>)?(?!\?)/g;
-    function pathToRegexp(path2, keys, options) {
+    function pathToRegexp(path3, keys, options) {
       options = options || {};
       keys = keys || [];
       var strict = options.strict;
@@ -18804,8 +18804,8 @@ var require_path_to_regexp = __commonJS({
       var pos = 0;
       var backtrack = "";
       var m;
-      if (path2 instanceof RegExp) {
-        while (m = MATCHING_GROUP_REGEXP.exec(path2.source)) {
+      if (path3 instanceof RegExp) {
+        while (m = MATCHING_GROUP_REGEXP.exec(path3.source)) {
           if (m[0][0] === "\\") continue;
           keys.push({
             name: m[1] || name++,
@@ -18813,18 +18813,18 @@ var require_path_to_regexp = __commonJS({
             offset: m.index
           });
         }
-        return path2;
+        return path3;
       }
-      if (Array.isArray(path2)) {
-        path2 = path2.map(function(value) {
+      if (Array.isArray(path3)) {
+        path3 = path3.map(function(value) {
           return pathToRegexp(value, keys, options).source;
         });
-        return new RegExp(path2.join("|"), flags);
+        return new RegExp(path3.join("|"), flags);
       }
-      if (typeof path2 !== "string") {
+      if (typeof path3 !== "string") {
         throw new TypeError("path must be a string, array of strings, or regular expression");
       }
-      path2 = path2.replace(
+      path3 = path3.replace(
         /\\.|(\/)?(\.)?:(\w+)(\(.*?\))?(\*)?(\?)?|[.*]|\/\(/g,
         function(match, slash, format, key, capture, star, optional, offset) {
           if (match[0] === "\\") {
@@ -18841,7 +18841,7 @@ var require_path_to_regexp = __commonJS({
           if (slash || format) {
             backtrack = "";
           } else {
-            backtrack += path2.slice(pos, offset);
+            backtrack += path3.slice(pos, offset);
           }
           pos = offset + match.length;
           if (match === "*") {
@@ -18871,7 +18871,7 @@ var require_path_to_regexp = __commonJS({
           return result;
         }
       );
-      while (m = MATCHING_GROUP_REGEXP.exec(path2)) {
+      while (m = MATCHING_GROUP_REGEXP.exec(path3)) {
         if (m[0][0] === "\\") continue;
         if (keysOffset + i === keys.length || keys[keysOffset + i].offset > m.index) {
           keys.splice(keysOffset + i, 0, {
@@ -18883,13 +18883,13 @@ var require_path_to_regexp = __commonJS({
         }
         i++;
       }
-      path2 += strict ? "" : path2[path2.length - 1] === "/" ? "?" : "/?";
+      path3 += strict ? "" : path3[path3.length - 1] === "/" ? "?" : "/?";
       if (end) {
-        path2 += "$";
-      } else if (path2[path2.length - 1] !== "/") {
-        path2 += lookahead ? "(?=/|$)" : "(?:/|$)";
+        path3 += "$";
+      } else if (path3[path3.length - 1] !== "/") {
+        path3 += lookahead ? "(?=/|$)" : "(?:/|$)";
       }
-      return new RegExp("^" + path2, flags);
+      return new RegExp("^" + path3, flags);
     }
   }
 });
@@ -18902,19 +18902,19 @@ var require_layer = __commonJS({
     var debug = require_src3()("express:router:layer");
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     module2.exports = Layer;
-    function Layer(path2, options, fn) {
+    function Layer(path3, options, fn) {
       if (!(this instanceof Layer)) {
-        return new Layer(path2, options, fn);
+        return new Layer(path3, options, fn);
       }
-      debug("new %o", path2);
+      debug("new %o", path3);
       var opts = options || {};
       this.handle = fn;
       this.name = fn.name || "<anonymous>";
       this.params = void 0;
       this.path = void 0;
-      this.regexp = pathRegexp(path2, this.keys = [], opts);
-      this.regexp.fast_star = path2 === "*";
-      this.regexp.fast_slash = path2 === "/" && opts.end === false;
+      this.regexp = pathRegexp(path3, this.keys = [], opts);
+      this.regexp.fast_star = path3 === "*";
+      this.regexp.fast_slash = path3 === "/" && opts.end === false;
     }
     Layer.prototype.handle_error = function handle_error(error, req, res, next) {
       var fn = this.handle;
@@ -18938,20 +18938,20 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.match = function match(path2) {
+    Layer.prototype.match = function match(path3) {
       var match2;
-      if (path2 != null) {
+      if (path3 != null) {
         if (this.regexp.fast_slash) {
           this.params = {};
           this.path = "";
           return true;
         }
         if (this.regexp.fast_star) {
-          this.params = { "0": decode_param(path2) };
-          this.path = path2;
+          this.params = { "0": decode_param(path3) };
+          this.path = path3;
           return true;
         }
-        match2 = this.regexp.exec(path2);
+        match2 = this.regexp.exec(path3);
       }
       if (!match2) {
         this.params = void 0;
@@ -19044,10 +19044,10 @@ var require_route = __commonJS({
     var slice = Array.prototype.slice;
     var toString = Object.prototype.toString;
     module2.exports = Route;
-    function Route(path2) {
-      this.path = path2;
+    function Route(path3) {
+      this.path = path3;
       this.stack = [];
-      debug("new %o", path2);
+      debug("new %o", path3);
       this.methods = {};
     }
     Route.prototype._handles_method = function _handles_method(method) {
@@ -19259,8 +19259,8 @@ var require_router = __commonJS({
         if (++sync > 100) {
           return setImmediate(next, err);
         }
-        var path2 = getPathname(req);
-        if (path2 == null) {
+        var path3 = getPathname(req);
+        if (path3 == null) {
           return done(layerError);
         }
         var layer;
@@ -19268,7 +19268,7 @@ var require_router = __commonJS({
         var route;
         while (match !== true && idx < stack.length) {
           layer = stack[idx++];
-          match = matchLayer(layer, path2);
+          match = matchLayer(layer, path3);
           route = layer.route;
           if (typeof match !== "boolean") {
             layerError = layerError || match;
@@ -19306,18 +19306,18 @@ var require_router = __commonJS({
           } else if (route) {
             layer.handle_request(req, res, next);
           } else {
-            trim_prefix(layer, layerError, layerPath, path2);
+            trim_prefix(layer, layerError, layerPath, path3);
           }
           sync = 0;
         });
       }
-      function trim_prefix(layer, layerError, layerPath, path2) {
+      function trim_prefix(layer, layerError, layerPath, path3) {
         if (layerPath.length !== 0) {
-          if (layerPath !== path2.slice(0, layerPath.length)) {
+          if (layerPath !== path3.slice(0, layerPath.length)) {
             next(layerError);
             return;
           }
-          var c = path2[layerPath.length];
+          var c = path3[layerPath.length];
           if (c && c !== "/" && c !== ".") return next(layerError);
           debug("trim prefix (%s) from url %s", layerPath, req.url);
           removed = layerPath;
@@ -19395,7 +19395,7 @@ var require_router = __commonJS({
     };
     proto.use = function use(fn) {
       var offset = 0;
-      var path2 = "/";
+      var path3 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -19403,7 +19403,7 @@ var require_router = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path2 = fn;
+          path3 = fn;
         }
       }
       var callbacks = flatten(slice.call(arguments, offset));
@@ -19415,8 +19415,8 @@ var require_router = __commonJS({
         if (typeof fn !== "function") {
           throw new TypeError("Router.use() requires a middleware function but got a " + gettype(fn));
         }
-        debug("use %o %s", path2, fn.name || "<anonymous>");
-        var layer = new Layer(path2, {
+        debug("use %o %s", path3, fn.name || "<anonymous>");
+        var layer = new Layer(path3, {
           sensitive: this.caseSensitive,
           strict: false,
           end: false
@@ -19426,9 +19426,9 @@ var require_router = __commonJS({
       }
       return this;
     };
-    proto.route = function route(path2) {
-      var route2 = new Route(path2);
-      var layer = new Layer(path2, {
+    proto.route = function route(path3) {
+      var route2 = new Route(path3);
+      var layer = new Layer(path3, {
         sensitive: this.caseSensitive,
         strict: this.strict,
         end: true
@@ -19438,8 +19438,8 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      proto[method] = function(path2) {
-        var route = this.route(path2);
+      proto[method] = function(path3) {
+        var route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
@@ -19475,9 +19475,9 @@ var require_router = __commonJS({
       }
       return toString.call(obj).replace(objectRegExp, "$1");
     }
-    function matchLayer(layer, path2) {
+    function matchLayer(layer, path3) {
       try {
-        return layer.match(path2);
+        return layer.match(path3);
       } catch (err) {
         return err;
       }
@@ -19547,14 +19547,14 @@ var require_init = __commonJS({
   "node_modules/express/lib/middleware/init.js"(exports2) {
     "use strict";
     var setPrototypeOf = require_setprototypeof();
-    exports2.init = function(app3) {
+    exports2.init = function(app4) {
       return function expressInit(req, res, next) {
-        if (app3.enabled("x-powered-by")) res.setHeader("X-Powered-By", "Express");
+        if (app4.enabled("x-powered-by")) res.setHeader("X-Powered-By", "Express");
         req.res = res;
         res.req = req;
         req.next = next;
-        setPrototypeOf(req, app3.request);
-        setPrototypeOf(res, app3.response);
+        setPrototypeOf(req, app4.request);
+        setPrototypeOf(res, app4.response);
         res.locals = res.locals || /* @__PURE__ */ Object.create(null);
         next();
       };
@@ -20478,13 +20478,13 @@ var require_view = __commonJS({
   "node_modules/express/lib/view.js"(exports2, module2) {
     "use strict";
     var debug = require_src3()("express:view");
-    var path2 = require("path");
-    var fs = require("fs");
-    var dirname = path2.dirname;
-    var basename = path2.basename;
-    var extname = path2.extname;
-    var join4 = path2.join;
-    var resolve = path2.resolve;
+    var path3 = require("path");
+    var fs2 = require("fs");
+    var dirname = path3.dirname;
+    var basename = path3.basename;
+    var extname = path3.extname;
+    var join4 = path3.join;
+    var resolve = path3.resolve;
     module2.exports = View;
     function View(name, options) {
       var opts = options || {};
@@ -20513,17 +20513,17 @@ var require_view = __commonJS({
       this.path = this.lookup(fileName);
     }
     View.prototype.lookup = function lookup(name) {
-      var path3;
+      var path4;
       var roots = [].concat(this.root);
       debug('lookup "%s"', name);
-      for (var i = 0; i < roots.length && !path3; i++) {
+      for (var i = 0; i < roots.length && !path4; i++) {
         var root = roots[i];
         var loc = resolve(root, name);
         var dir = dirname(loc);
         var file = basename(loc);
-        path3 = this.resolve(dir, file);
+        path4 = this.resolve(dir, file);
       }
-      return path3;
+      return path4;
     };
     View.prototype.render = function render(options, callback) {
       debug('render "%s"', this.path);
@@ -20531,21 +20531,21 @@ var require_view = __commonJS({
     };
     View.prototype.resolve = function resolve2(dir, file) {
       var ext = this.ext;
-      var path3 = join4(dir, file);
-      var stat = tryStat(path3);
+      var path4 = join4(dir, file);
+      var stat = tryStat(path4);
       if (stat && stat.isFile()) {
-        return path3;
+        return path4;
       }
-      path3 = join4(dir, basename(file, ext), "index" + ext);
-      stat = tryStat(path3);
+      path4 = join4(dir, basename(file, ext), "index" + ext);
+      stat = tryStat(path4);
       if (stat && stat.isFile()) {
-        return path3;
+        return path4;
       }
     };
-    function tryStat(path3) {
-      debug('stat "%s"', path3);
+    function tryStat(path4) {
+      debug('stat "%s"', path4);
       try {
-        return fs.statSync(path3);
+        return fs2.statSync(path4);
       } catch (e) {
         return void 0;
       }
@@ -21150,8 +21150,8 @@ var require_node4 = __commonJS({
           }
           break;
         case "FILE":
-          var fs = require("fs");
-          stream2 = new fs.SyncWriteStream(fd2, { autoClose: false });
+          var fs2 = require("fs");
+          stream2 = new fs2.SyncWriteStream(fd2, { autoClose: false });
           stream2._type = "fs";
           break;
         case "PIPE":
@@ -21203,14 +21203,14 @@ var require_etag = __commonJS({
   "node_modules/etag/index.js"(exports2, module2) {
     "use strict";
     module2.exports = etag;
-    var crypto2 = require("crypto");
+    var crypto3 = require("crypto");
     var Stats = require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash = crypto2.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash = crypto3.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash + '"';
     }
@@ -21323,8 +21323,8 @@ var require_types = __commonJS({
 // node_modules/mime/mime.js
 var require_mime = __commonJS({
   "node_modules/mime/mime.js"(exports2, module2) {
-    var path2 = require("path");
-    var fs = require("fs");
+    var path3 = require("path");
+    var fs2 = require("fs");
     function Mime() {
       this.types = /* @__PURE__ */ Object.create(null);
       this.extensions = /* @__PURE__ */ Object.create(null);
@@ -21345,7 +21345,7 @@ var require_mime = __commonJS({
     };
     Mime.prototype.load = function(file) {
       this._loading = file;
-      var map = {}, content = fs.readFileSync(file, "ascii"), lines = content.split(/[\r\n]+/);
+      var map = {}, content = fs2.readFileSync(file, "ascii"), lines = content.split(/[\r\n]+/);
       lines.forEach(function(line) {
         var fields = line.replace(/\s*#.*|^\s*|\s*$/g, "").split(/\s+/);
         map[fields.shift()] = fields;
@@ -21353,8 +21353,8 @@ var require_mime = __commonJS({
       this.define(map);
       this._loading = null;
     };
-    Mime.prototype.lookup = function(path3, fallback) {
-      var ext = path3.replace(/^.*[\.\/\\]/, "").toLowerCase();
+    Mime.prototype.lookup = function(path4, fallback) {
+      var ext = path4.replace(/^.*[\.\/\\]/, "").toLowerCase();
       return this.types[ext] || fallback || this.default_type;
     };
     Mime.prototype.extension = function(mimeType) {
@@ -21583,33 +21583,33 @@ var require_send = __commonJS({
     var escapeHtml = require_escape_html();
     var etag = require_etag();
     var fresh = require_fresh();
-    var fs = require("fs");
+    var fs2 = require("fs");
     var mime = require_mime();
     var ms = require_ms5();
     var onFinished = require_on_finished();
     var parseRange = require_range_parser();
-    var path2 = require("path");
+    var path3 = require("path");
     var statuses = require_statuses();
     var Stream = require("stream");
     var util = require("util");
-    var extname = path2.extname;
-    var join4 = path2.join;
-    var normalize = path2.normalize;
-    var resolve = path2.resolve;
-    var sep = path2.sep;
+    var extname = path3.extname;
+    var join4 = path3.join;
+    var normalize = path3.normalize;
+    var resolve = path3.resolve;
+    var sep = path3.sep;
     var BYTES_RANGE_REGEXP = /^ *bytes=/;
     var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1e3;
     var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
     module2.exports = send;
     module2.exports.mime = mime;
-    function send(req, path3, options) {
-      return new SendStream(req, path3, options);
+    function send(req, path4, options) {
+      return new SendStream(req, path4, options);
     }
-    function SendStream(req, path3, options) {
+    function SendStream(req, path4, options) {
       Stream.call(this);
       var opts = options || {};
       this.options = opts;
-      this.path = path3;
+      this.path = path4;
       this.req = req;
       this._acceptRanges = opts.acceptRanges !== void 0 ? Boolean(opts.acceptRanges) : true;
       this._cacheControl = opts.cacheControl !== void 0 ? Boolean(opts.cacheControl) : true;
@@ -21655,8 +21655,8 @@ var require_send = __commonJS({
       this._index = index2;
       return this;
     }, "send.index: pass index as option");
-    SendStream.prototype.root = function root(path3) {
-      this._root = resolve(String(path3));
+    SendStream.prototype.root = function root(path4) {
+      this._root = resolve(String(path4));
       debug("root %s", this._root);
       return this;
     };
@@ -21769,10 +21769,10 @@ var require_send = __commonJS({
       var lastModified = this.res.getHeader("Last-Modified");
       return parseHttpDate(lastModified) <= parseHttpDate(ifRange);
     };
-    SendStream.prototype.redirect = function redirect(path3) {
+    SendStream.prototype.redirect = function redirect(path4) {
       var res = this.res;
       if (hasListeners(this, "directory")) {
-        this.emit("directory", res, path3);
+        this.emit("directory", res, path4);
         return;
       }
       if (this.hasTrailingSlash()) {
@@ -21792,42 +21792,42 @@ var require_send = __commonJS({
     SendStream.prototype.pipe = function pipe(res) {
       var root = this._root;
       this.res = res;
-      var path3 = decode(this.path);
-      if (path3 === -1) {
+      var path4 = decode(this.path);
+      if (path4 === -1) {
         this.error(400);
         return res;
       }
-      if (~path3.indexOf("\0")) {
+      if (~path4.indexOf("\0")) {
         this.error(400);
         return res;
       }
       var parts;
       if (root !== null) {
-        if (path3) {
-          path3 = normalize("." + sep + path3);
+        if (path4) {
+          path4 = normalize("." + sep + path4);
         }
-        if (UP_PATH_REGEXP.test(path3)) {
-          debug('malicious path "%s"', path3);
+        if (UP_PATH_REGEXP.test(path4)) {
+          debug('malicious path "%s"', path4);
           this.error(403);
           return res;
         }
-        parts = path3.split(sep);
-        path3 = normalize(join4(root, path3));
+        parts = path4.split(sep);
+        path4 = normalize(join4(root, path4));
       } else {
-        if (UP_PATH_REGEXP.test(path3)) {
-          debug('malicious path "%s"', path3);
+        if (UP_PATH_REGEXP.test(path4)) {
+          debug('malicious path "%s"', path4);
           this.error(403);
           return res;
         }
-        parts = normalize(path3).split(sep);
-        path3 = resolve(path3);
+        parts = normalize(path4).split(sep);
+        path4 = resolve(path4);
       }
       if (containsDotFile(parts)) {
         var access = this._dotfiles;
         if (access === void 0) {
           access = parts[parts.length - 1][0] === "." ? this._hidden ? "allow" : "ignore" : "allow";
         }
-        debug('%s dotfile "%s"', access, path3);
+        debug('%s dotfile "%s"', access, path4);
         switch (access) {
           case "allow":
             break;
@@ -21841,13 +21841,13 @@ var require_send = __commonJS({
         }
       }
       if (this._index.length && this.hasTrailingSlash()) {
-        this.sendIndex(path3);
+        this.sendIndex(path4);
         return res;
       }
-      this.sendFile(path3);
+      this.sendFile(path4);
       return res;
     };
-    SendStream.prototype.send = function send2(path3, stat) {
+    SendStream.prototype.send = function send2(path4, stat) {
       var len = stat.size;
       var options = this.options;
       var opts = {};
@@ -21859,9 +21859,9 @@ var require_send = __commonJS({
         this.headersAlreadySent();
         return;
       }
-      debug('pipe "%s"', path3);
-      this.setHeader(path3, stat);
-      this.type(path3);
+      debug('pipe "%s"', path4);
+      this.setHeader(path4, stat);
+      this.type(path4);
       if (this.isConditionalGET()) {
         if (this.isPreconditionFailure()) {
           this.error(412);
@@ -21910,28 +21910,28 @@ var require_send = __commonJS({
         res.end();
         return;
       }
-      this.stream(path3, opts);
+      this.stream(path4, opts);
     };
-    SendStream.prototype.sendFile = function sendFile(path3) {
+    SendStream.prototype.sendFile = function sendFile(path4) {
       var i = 0;
       var self = this;
-      debug('stat "%s"', path3);
-      fs.stat(path3, function onstat(err, stat) {
-        if (err && err.code === "ENOENT" && !extname(path3) && path3[path3.length - 1] !== sep) {
+      debug('stat "%s"', path4);
+      fs2.stat(path4, function onstat(err, stat) {
+        if (err && err.code === "ENOENT" && !extname(path4) && path4[path4.length - 1] !== sep) {
           return next(err);
         }
         if (err) return self.onStatError(err);
-        if (stat.isDirectory()) return self.redirect(path3);
-        self.emit("file", path3, stat);
-        self.send(path3, stat);
+        if (stat.isDirectory()) return self.redirect(path4);
+        self.emit("file", path4, stat);
+        self.send(path4, stat);
       });
       function next(err) {
         if (self._extensions.length <= i) {
           return err ? self.onStatError(err) : self.error(404);
         }
-        var p = path3 + "." + self._extensions[i++];
+        var p = path4 + "." + self._extensions[i++];
         debug('stat "%s"', p);
-        fs.stat(p, function(err2, stat) {
+        fs2.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self.emit("file", p, stat);
@@ -21939,7 +21939,7 @@ var require_send = __commonJS({
         });
       }
     };
-    SendStream.prototype.sendIndex = function sendIndex(path3) {
+    SendStream.prototype.sendIndex = function sendIndex(path4) {
       var i = -1;
       var self = this;
       function next(err) {
@@ -21947,9 +21947,9 @@ var require_send = __commonJS({
           if (err) return self.onStatError(err);
           return self.error(404);
         }
-        var p = join4(path3, self._index[i]);
+        var p = join4(path4, self._index[i]);
         debug('stat "%s"', p);
-        fs.stat(p, function(err2, stat) {
+        fs2.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self.emit("file", p, stat);
@@ -21958,10 +21958,10 @@ var require_send = __commonJS({
       }
       next();
     };
-    SendStream.prototype.stream = function stream(path3, options) {
+    SendStream.prototype.stream = function stream(path4, options) {
       var self = this;
       var res = this.res;
-      var stream2 = fs.createReadStream(path3, options);
+      var stream2 = fs2.createReadStream(path4, options);
       this.emit("stream", stream2);
       stream2.pipe(res);
       function cleanup() {
@@ -21976,10 +21976,10 @@ var require_send = __commonJS({
         self.emit("end");
       });
     };
-    SendStream.prototype.type = function type(path3) {
+    SendStream.prototype.type = function type(path4) {
       var res = this.res;
       if (res.getHeader("Content-Type")) return;
-      var type2 = mime.lookup(path3);
+      var type2 = mime.lookup(path4);
       if (!type2) {
         debug("no content-type");
         return;
@@ -21988,9 +21988,9 @@ var require_send = __commonJS({
       debug("content-type %s", type2);
       res.setHeader("Content-Type", type2 + (charset ? "; charset=" + charset : ""));
     };
-    SendStream.prototype.setHeader = function setHeader(path3, stat) {
+    SendStream.prototype.setHeader = function setHeader(path4, stat) {
       var res = this.res;
-      this.emit("headers", res, path3, stat);
+      this.emit("headers", res, path4, stat);
       if (this._acceptRanges && !res.getHeader("Accept-Ranges")) {
         debug("accept ranges");
         res.setHeader("Accept-Ranges", "bytes");
@@ -22049,9 +22049,9 @@ var require_send = __commonJS({
       }
       return err instanceof Error ? createError(status, err, { expose: false }) : createError(status, err);
     }
-    function decode(path3) {
+    function decode(path4) {
       try {
-        return decodeURIComponent(path3);
+        return decodeURIComponent(path4);
       } catch (err) {
         return -1;
       }
@@ -22960,10 +22960,10 @@ var require_utils3 = __commonJS({
     var querystring = require("querystring");
     exports2.etag = createETagGenerator({ weak: false });
     exports2.wetag = createETagGenerator({ weak: true });
-    exports2.isAbsolute = function(path2) {
-      if ("/" === path2[0]) return true;
-      if (":" === path2[1] && ("\\" === path2[2] || "/" === path2[2])) return true;
-      if ("\\\\" === path2.substring(0, 2)) return true;
+    exports2.isAbsolute = function(path3) {
+      if ("/" === path3[0]) return true;
+      if (":" === path3[1] && ("\\" === path3[2] || "/" === path3[2])) return true;
+      if ("\\\\" === path3.substring(0, 2)) return true;
     };
     exports2.flatten = deprecate.function(
       flatten,
@@ -23103,15 +23103,15 @@ var require_application = __commonJS({
     var setPrototypeOf = require_setprototypeof();
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     var slice = Array.prototype.slice;
-    var app3 = exports2 = module2.exports = {};
+    var app4 = exports2 = module2.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
-    app3.init = function init() {
+    app4.init = function init() {
       this.cache = {};
       this.engines = {};
       this.settings = {};
       this.defaultConfiguration();
     };
-    app3.defaultConfiguration = function defaultConfiguration() {
+    app4.defaultConfiguration = function defaultConfiguration() {
       var env = process.env.NODE_ENV || "development";
       this.enable("x-powered-by");
       this.set("etag", "weak");
@@ -23149,7 +23149,7 @@ var require_application = __commonJS({
         }
       });
     };
-    app3.lazyrouter = function lazyrouter() {
+    app4.lazyrouter = function lazyrouter() {
       if (!this._router) {
         this._router = new Router({
           caseSensitive: this.enabled("case sensitive routing"),
@@ -23159,7 +23159,7 @@ var require_application = __commonJS({
         this._router.use(middleware.init(this));
       }
     };
-    app3.handle = function handle(req, res, callback) {
+    app4.handle = function handle(req, res, callback) {
       var router = this._router;
       var done = callback || finalhandler(req, res, {
         env: this.get("env"),
@@ -23172,9 +23172,9 @@ var require_application = __commonJS({
       }
       router.handle(req, res, done);
     };
-    app3.use = function use(fn) {
+    app4.use = function use(fn) {
       var offset = 0;
-      var path2 = "/";
+      var path3 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -23182,7 +23182,7 @@ var require_application = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path2 = fn;
+          path3 = fn;
         }
       }
       var fns = flatten(slice.call(arguments, offset));
@@ -23193,12 +23193,12 @@ var require_application = __commonJS({
       var router = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router.use(path2, fn2);
+          return router.use(path3, fn2);
         }
-        debug(".use app under %s", path2);
-        fn2.mountpath = path2;
+        debug(".use app under %s", path3);
+        fn2.mountpath = path3;
         fn2.parent = this;
-        router.use(path2, function mounted_app(req, res, next) {
+        router.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -23210,11 +23210,11 @@ var require_application = __commonJS({
       }, this);
       return this;
     };
-    app3.route = function route(path2) {
+    app4.route = function route(path3) {
       this.lazyrouter();
-      return this._router.route(path2);
+      return this._router.route(path3);
     };
-    app3.engine = function engine(ext, fn) {
+    app4.engine = function engine(ext, fn) {
       if (typeof fn !== "function") {
         throw new Error("callback function required");
       }
@@ -23222,7 +23222,7 @@ var require_application = __commonJS({
       this.engines[extension] = fn;
       return this;
     };
-    app3.param = function param(name, fn) {
+    app4.param = function param(name, fn) {
       this.lazyrouter();
       if (Array.isArray(name)) {
         for (var i = 0; i < name.length; i++) {
@@ -23233,7 +23233,7 @@ var require_application = __commonJS({
       this._router.param(name, fn);
       return this;
     };
-    app3.set = function set(setting, val) {
+    app4.set = function set(setting, val) {
       if (arguments.length === 1) {
         var settings = this.settings;
         while (settings && settings !== Object.prototype) {
@@ -23263,43 +23263,43 @@ var require_application = __commonJS({
       }
       return this;
     };
-    app3.path = function path2() {
+    app4.path = function path3() {
       return this.parent ? this.parent.path() + this.mountpath : "";
     };
-    app3.enabled = function enabled(setting) {
+    app4.enabled = function enabled(setting) {
       return Boolean(this.set(setting));
     };
-    app3.disabled = function disabled(setting) {
+    app4.disabled = function disabled(setting) {
       return !this.set(setting);
     };
-    app3.enable = function enable(setting) {
+    app4.enable = function enable(setting) {
       return this.set(setting, true);
     };
-    app3.disable = function disable(setting) {
+    app4.disable = function disable(setting) {
       return this.set(setting, false);
     };
     methods.forEach(function(method) {
-      app3[method] = function(path2) {
+      app4[method] = function(path3) {
         if (method === "get" && arguments.length === 1) {
-          return this.set(path2);
+          return this.set(path3);
         }
         this.lazyrouter();
-        var route = this._router.route(path2);
+        var route = this._router.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
     });
-    app3.all = function all(path2) {
+    app4.all = function all(path3) {
       this.lazyrouter();
-      var route = this._router.route(path2);
+      var route = this._router.route(path3);
       var args = slice.call(arguments, 1);
       for (var i = 0; i < methods.length; i++) {
         route[methods[i]].apply(route, args);
       }
       return this;
     };
-    app3.del = deprecate.function(app3.delete, "app.del: Use app.delete instead");
-    app3.render = function render(name, options, callback) {
+    app4.del = deprecate.function(app4.delete, "app.del: Use app.delete instead");
+    app4.render = function render(name, options, callback) {
       var cache = this.cache;
       var done = callback;
       var engines = this.engines;
@@ -23340,7 +23340,7 @@ var require_application = __commonJS({
       }
       tryRender(view, renderOptions, done);
     };
-    app3.listen = function listen() {
+    app4.listen = function listen() {
       var server = http.createServer(this);
       return server.listen.apply(server, arguments);
     };
@@ -24050,7 +24050,7 @@ var require_request = __commonJS({
       var subdomains2 = !isIP(hostname) ? hostname.split(".").reverse() : [hostname];
       return subdomains2.slice(offset);
     });
-    defineGetter(req, "path", function path2() {
+    defineGetter(req, "path", function path3() {
       return parse(this).pathname;
     });
     defineGetter(req, "hostname", function hostname() {
@@ -24102,11 +24102,11 @@ var require_request = __commonJS({
 // node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "node_modules/cookie-signature/index.js"(exports2) {
-    var crypto2 = require("crypto");
+    var crypto3 = require("crypto");
     exports2.sign = function(val, secret) {
       if ("string" !== typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto2.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto3.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports2.unsign = function(val, secret) {
       if ("string" !== typeof val) throw new TypeError("Signed cookie string must be provided.");
@@ -24115,7 +24115,7 @@ var require_cookie_signature = __commonJS({
       return sha1(mac) == sha1(val) ? str : false;
     };
     function sha1(str) {
-      return crypto2.createHash("sha1").update(str).digest("hex");
+      return crypto3.createHash("sha1").update(str).digest("hex");
     }
   }
 });
@@ -24299,7 +24299,7 @@ var require_response = __commonJS({
     var http = require("http");
     var isAbsolute = require_utils3().isAbsolute;
     var onFinished = require_on_finished();
-    var path2 = require("path");
+    var path3 = require("path");
     var statuses = require_statuses();
     var merge = require_utils_merge();
     var sign = require_cookie_signature().sign;
@@ -24308,9 +24308,9 @@ var require_response = __commonJS({
     var setCharset = require_utils3().setCharset;
     var cookie = require_cookie();
     var send = require_send();
-    var extname = path2.extname;
+    var extname = path3.extname;
     var mime = send.mime;
-    var resolve = path2.resolve;
+    var resolve = path3.resolve;
     var vary = require_vary();
     var res = Object.create(http.ServerResponse.prototype);
     module2.exports = res;
@@ -24334,7 +24334,7 @@ var require_response = __commonJS({
       var encoding;
       var req = this.req;
       var type;
-      var app3 = this.app;
+      var app4 = this.app;
       if (arguments.length === 2) {
         if (typeof arguments[0] !== "number" && typeof arguments[1] === "number") {
           deprecate("res.send(body, status): Use res.status(status).send(body) instead");
@@ -24381,7 +24381,7 @@ var require_response = __commonJS({
           this.set("Content-Type", setCharset(type, "utf-8"));
         }
       }
-      var etagFn = app3.get("etag fn");
+      var etagFn = app4.get("etag fn");
       var generateETag = !this.get("ETag") && typeof etagFn === "function";
       var len;
       if (chunk !== void 0) {
@@ -24433,10 +24433,10 @@ var require_response = __commonJS({
           val = arguments[1];
         }
       }
-      var app3 = this.app;
-      var escape2 = app3.get("json escape");
-      var replacer = app3.get("json replacer");
-      var spaces = app3.get("json spaces");
+      var app4 = this.app;
+      var escape2 = app4.get("json escape");
+      var replacer = app4.get("json replacer");
+      var spaces = app4.get("json spaces");
       var body = stringify(val, replacer, spaces, escape2);
       if (!this.get("Content-Type")) {
         this.set("Content-Type", "application/json");
@@ -24455,12 +24455,12 @@ var require_response = __commonJS({
           val = arguments[1];
         }
       }
-      var app3 = this.app;
-      var escape2 = app3.get("json escape");
-      var replacer = app3.get("json replacer");
-      var spaces = app3.get("json spaces");
+      var app4 = this.app;
+      var escape2 = app4.get("json escape");
+      var replacer = app4.get("json replacer");
+      var spaces = app4.get("json spaces");
       var body = stringify(val, replacer, spaces, escape2);
-      var callback = this.req.query[app3.get("jsonp callback name")];
+      var callback = this.req.query[app4.get("jsonp callback name")];
       if (!this.get("Content-Type")) {
         this.set("X-Content-Type-Options", "nosniff");
         this.set("Content-Type", "application/json");
@@ -24487,26 +24487,26 @@ var require_response = __commonJS({
       this.type("txt");
       return this.send(body);
     };
-    res.sendFile = function sendFile(path3, options, callback) {
+    res.sendFile = function sendFile(path4, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
       var next = req.next;
       var opts = options || {};
-      if (!path3) {
+      if (!path4) {
         throw new TypeError("path argument is required to res.sendFile");
       }
-      if (typeof path3 !== "string") {
+      if (typeof path4 !== "string") {
         throw new TypeError("path must be a string to res.sendFile");
       }
       if (typeof options === "function") {
         done = options;
         opts = {};
       }
-      if (!opts.root && !isAbsolute(path3)) {
+      if (!opts.root && !isAbsolute(path4)) {
         throw new TypeError("path must be absolute or specify root to res.sendFile");
       }
-      var pathname = encodeURI(path3);
+      var pathname = encodeURI(path4);
       var file = send(req, pathname, opts);
       sendfile(res2, file, opts, function(err) {
         if (done) return done(err);
@@ -24516,7 +24516,7 @@ var require_response = __commonJS({
         }
       });
     };
-    res.sendfile = function(path3, options, callback) {
+    res.sendfile = function(path4, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
@@ -24526,7 +24526,7 @@ var require_response = __commonJS({
         done = options;
         opts = {};
       }
-      var file = send(req, path3, opts);
+      var file = send(req, path4, opts);
       sendfile(res2, file, opts, function(err) {
         if (done) return done(err);
         if (err && err.code === "EISDIR") return next();
@@ -24539,7 +24539,7 @@ var require_response = __commonJS({
       res.sendfile,
       "res.sendfile: Use res.sendFile instead"
     );
-    res.download = function download(path3, filename, options, callback) {
+    res.download = function download(path4, filename, options, callback) {
       var done = callback;
       var name = filename;
       var opts = options || null;
@@ -24556,7 +24556,7 @@ var require_response = __commonJS({
         opts = filename;
       }
       var headers = {
-        "Content-Disposition": contentDisposition(name || path3)
+        "Content-Disposition": contentDisposition(name || path4)
       };
       if (opts && opts.headers) {
         var keys = Object.keys(opts.headers);
@@ -24569,7 +24569,7 @@ var require_response = __commonJS({
       }
       opts = Object.create(opts);
       opts.headers = headers;
-      var fullPath = !opts.root ? resolve(path3) : path3;
+      var fullPath = !opts.root ? resolve(path4) : path4;
       return this.sendFile(fullPath, opts, done);
     };
     res.contentType = res.type = function contentType(type) {
@@ -24725,7 +24725,7 @@ var require_response = __commonJS({
       return this;
     };
     res.render = function render(view, options, callback) {
-      var app3 = this.req.app;
+      var app4 = this.req.app;
       var done = callback;
       var opts = options || {};
       var req = this.req;
@@ -24739,7 +24739,7 @@ var require_response = __commonJS({
         if (err) return req.next(err);
         self.send(str);
       };
-      app3.render(view, opts, done);
+      app4.render(view, opts, done);
     };
     function sendfile(res2, file, options, callback) {
       var done = false;
@@ -24870,11 +24870,11 @@ var require_serve_static = __commonJS({
         }
         var forwardError = !fallthrough;
         var originalUrl = parseUrl.original(req);
-        var path2 = parseUrl(req).pathname;
-        if (path2 === "/" && originalUrl.pathname.substr(-1) !== "/") {
-          path2 = "";
+        var path3 = parseUrl(req).pathname;
+        if (path3 === "/" && originalUrl.pathname.substr(-1) !== "/") {
+          path3 = "";
         }
-        var stream = send(req, path2, opts);
+        var stream = send(req, path3, opts);
         stream.on("directory", onDirectory);
         if (setHeaders) {
           stream.on("headers", setHeaders);
@@ -24947,19 +24947,19 @@ var require_express = __commonJS({
     var res = require_response();
     exports2 = module2.exports = createApplication;
     function createApplication() {
-      var app3 = function(req2, res2, next) {
-        app3.handle(req2, res2, next);
+      var app4 = function(req2, res2, next) {
+        app4.handle(req2, res2, next);
       };
-      mixin(app3, EventEmitter.prototype, false);
-      mixin(app3, proto, false);
-      app3.request = Object.create(req, {
-        app: { configurable: true, enumerable: true, writable: true, value: app3 }
+      mixin(app4, EventEmitter.prototype, false);
+      mixin(app4, proto, false);
+      app4.request = Object.create(req, {
+        app: { configurable: true, enumerable: true, writable: true, value: app4 }
       });
-      app3.response = Object.create(res, {
-        app: { configurable: true, enumerable: true, writable: true, value: app3 }
+      app4.response = Object.create(res, {
+        app: { configurable: true, enumerable: true, writable: true, value: app4 }
       });
-      app3.init();
-      return app3;
+      app4.init();
+      return app4;
     }
     exports2.application = proto;
     exports2.request = req;
@@ -25011,13 +25011,13 @@ var require_express2 = __commonJS({
 });
 
 // src/main/main.ts
-var import_electron = require("electron");
-var import_path4 = require("path");
+var import_electron2 = require("electron");
+var import_path5 = require("path");
 
 // src/main/apiServer.ts
 var import_cors = __toESM(require_lib(), 1);
 var import_express = __toESM(require_express2(), 1);
-var import_path3 = __toESM(require("path"), 1);
+var import_path4 = __toESM(require("path"), 1);
 
 // node_modules/uuid/dist-node/stringify.js
 var byteToHex = [];
@@ -25077,6 +25077,7 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS profiles (
       id TEXT PRIMARY KEY,
       name TEXT,
+      email TEXT,
       partition TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
@@ -25170,6 +25171,9 @@ function initDb() {
     );
   `);
   const profileColumns = db.prepare("PRAGMA table_info(profiles)").all().map((column) => column.name);
+  if (!profileColumns.includes("email")) {
+    db.prepare("ALTER TABLE profiles ADD COLUMN email TEXT").run();
+  }
   if (!profileColumns.includes("partition")) {
     db.prepare("ALTER TABLE profiles ADD COLUMN partition TEXT").run();
   }
@@ -25232,6 +25236,12 @@ var memory = {
 };
 var memoryDb_default = db;
 
+// src/main/profileBackupService.ts
+var import_crypto = __toESM(require("crypto"), 1);
+var import_fs2 = __toESM(require("fs"), 1);
+var import_path3 = __toESM(require("path"), 1);
+var import_electron = require("electron");
+
 // src/main/profileStore.ts
 var ACTIVE_PROFILE_KEY = "active_profile_id";
 function slugify(value) {
@@ -25285,8 +25295,9 @@ var ProfileStore = class {
     setSettingValue(ACTIVE_PROFILE_KEY, profile.id);
     return profile;
   }
-  create(name, requestedId) {
+  create(name, requestedId, email) {
     const cleanName = name.trim();
+    const cleanEmail = typeof email === "string" ? email.trim() : "";
     if (!cleanName) {
       throw new Error("PROFILE_NAME_REQUIRED");
     }
@@ -25295,19 +25306,35 @@ var ProfileStore = class {
       throw new Error("PROFILE_ID_EXISTS");
     }
     const partition = profilePartition(id);
-    memoryDb_default.prepare("INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)").run(id, cleanName, partition);
+    memoryDb_default.prepare("INSERT INTO profiles (id, name, email, partition) VALUES (?, ?, ?, ?)").run(id, cleanName, cleanEmail || null, partition);
     return this.get(id);
   }
-  rename(idOrName, name) {
+  update(idOrName, payload) {
     const profile = this.get(idOrName);
-    const cleanName = name.trim();
     if (!profile) {
       throw new Error("PROFILE_NOT_FOUND");
     }
+    const hasName = typeof payload.name === "string";
+    if (!hasName) {
+      throw new Error("PROFILE_UPDATE_REQUIRED");
+    }
+    const cleanName = payload.name.trim();
     if (!cleanName) {
       throw new Error("PROFILE_NAME_REQUIRED");
     }
     memoryDb_default.prepare("UPDATE profiles SET name = ? WHERE id = ?").run(cleanName, profile.id);
+    return this.get(profile.id);
+  }
+  setEmail(idOrName, email) {
+    const profile = this.get(idOrName);
+    if (!profile) {
+      throw new Error("PROFILE_NOT_FOUND");
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      throw new Error("EMAIL_REQUIRED_FOR_PROFILE");
+    }
+    memoryDb_default.prepare("UPDATE profiles SET email = ? WHERE id = ?").run(cleanEmail, profile.id);
     return this.get(profile.id);
   }
   delete(idOrName) {
@@ -25702,11 +25729,418 @@ var TabManager = class {
 };
 var tabManager = new TabManager();
 
+// src/main/profileBackupService.ts
+var FORMAT = "glassbox-profile-backup";
+var SCHEMA_VERSION = 2;
+var MAX_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+var SKIP_NAMES = /* @__PURE__ */ new Set([
+  "LOCK",
+  "SingletonLock",
+  "SingletonSocket",
+  "SingletonCookie",
+  "Cache",
+  "Code Cache",
+  "GPUCache",
+  "DawnCache",
+  "GrShaderCache"
+]);
+function deriveKey(password, salt) {
+  return import_crypto.default.scryptSync(password, salt, 32);
+}
+function encryptPayload(payload, password) {
+  const salt = import_crypto.default.randomBytes(16);
+  const iv = import_crypto.default.randomBytes(12);
+  const key = deriveKey(password, salt);
+  const cipher = import_crypto.default.createCipheriv("aes-256-gcm", key, iv);
+  const plaintext = Buffer.from(JSON.stringify(payload), "utf8");
+  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return {
+    format: FORMAT,
+    schemaVersion: SCHEMA_VERSION,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    encrypted: true,
+    crypto: {
+      algorithm: "aes-256-gcm",
+      kdf: "scrypt",
+      salt: salt.toString("base64"),
+      iv: iv.toString("base64"),
+      authTag: authTag.toString("base64")
+    },
+    payloadBase64: encrypted.toString("base64")
+  };
+}
+function decryptPayload(backup, password) {
+  if (!backup || backup.format !== FORMAT || backup.schemaVersion !== SCHEMA_VERSION) {
+    throw new Error("INVALID_BACKUP_FILE");
+  }
+  if (!backup.encrypted) {
+    throw new Error("BACKUP_NOT_ENCRYPTED");
+  }
+  try {
+    const salt = Buffer.from(backup.crypto?.salt || "", "base64");
+    const iv = Buffer.from(backup.crypto?.iv || "", "base64");
+    const authTag = Buffer.from(backup.crypto?.authTag || "", "base64");
+    const encrypted = Buffer.from(backup.payloadBase64 || "", "base64");
+    const key = deriveKey(password, salt);
+    const decipher = import_crypto.default.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+    const plaintext = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return JSON.parse(plaintext.toString("utf8"));
+  } catch {
+    throw new Error("INVALID_BACKUP_PASSWORD_OR_CORRUPTED");
+  }
+}
+function stripPersistPrefix(partition) {
+  return partition.startsWith("persist:") ? partition.slice("persist:".length) : partition;
+}
+function getCandidatePartitionDirs(partition) {
+  const userData = import_electron.app.getPath("userData");
+  const clean = stripPersistPrefix(partition);
+  return [
+    import_path3.default.join(userData, "Partitions", clean),
+    import_path3.default.join(userData, "Partitions", partition),
+    import_path3.default.join(userData, clean),
+    import_path3.default.join(userData, partition)
+  ];
+}
+function findPartitionDir(partition) {
+  for (const candidate of getCandidatePartitionDirs(partition)) {
+    if (import_fs2.default.existsSync(candidate) && import_fs2.default.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+  }
+  return null;
+}
+function walkFiles(rootDir, currentDir = rootDir) {
+  const entries = import_fs2.default.readdirSync(currentDir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (SKIP_NAMES.has(entry.name)) continue;
+    const fullPath = import_path3.default.join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkFiles(rootDir, fullPath));
+      continue;
+    }
+    if (entry.isFile()) {
+      const stat = import_fs2.default.statSync(fullPath);
+      if (stat.size <= MAX_FILE_SIZE_BYTES) {
+        files.push(fullPath);
+      }
+    }
+  }
+  return files;
+}
+function readDirAsBackupFiles(rootDir) {
+  const files = walkFiles(rootDir);
+  const backupFiles = [];
+  const warnings = [];
+  for (const filePath of files) {
+    try {
+      backupFiles.push({
+        relativePath: import_path3.default.relative(rootDir, filePath).replace(/\\/g, "/"),
+        base64: import_fs2.default.readFileSync(filePath).toString("base64")
+      });
+    } catch (error) {
+      warnings.push(`Skipped ${import_path3.default.relative(rootDir, filePath).replace(/\\/g, "/")}: ${error?.message || error}`);
+    }
+  }
+  return {
+    files: backupFiles,
+    warnings
+  };
+}
+function isSafeRelativePath(relativePath) {
+  if (!relativePath) return false;
+  if (import_path3.default.isAbsolute(relativePath)) return false;
+  if (relativePath.includes("..")) return false;
+  if (relativePath.includes("\0")) return false;
+  return true;
+}
+function restoreBackupFiles(rootDir, files) {
+  import_fs2.default.mkdirSync(rootDir, { recursive: true });
+  for (const file of files) {
+    if (!isSafeRelativePath(file.relativePath)) {
+      continue;
+    }
+    const targetPath = import_path3.default.join(rootDir, file.relativePath);
+    import_fs2.default.mkdirSync(import_path3.default.dirname(targetPath), { recursive: true });
+    import_fs2.default.writeFileSync(targetPath, Buffer.from(file.base64, "base64"));
+  }
+}
+function cookieUrlFromCookie(cookie) {
+  if (typeof cookie?.url === "string" && cookie.url) {
+    return cookie.url;
+  }
+  const rawDomain = typeof cookie?.domain === "string" ? cookie.domain : "";
+  const hostname = rawDomain.replace(/^\./, "");
+  if (!hostname) {
+    return null;
+  }
+  const scheme = cookie?.secure ? "https" : "http";
+  const pathname = typeof cookie?.path === "string" && cookie.path ? cookie.path : "/";
+  return `${scheme}://${hostname}${pathname}`;
+}
+async function snapshotPartitionCookies(partition) {
+  try {
+    const ses = import_electron.session.fromPartition(partition);
+    if (!ses.cookies || typeof ses.cookies.get !== "function") {
+      return [];
+    }
+    return await ses.cookies.get({});
+  } catch {
+    return [];
+  }
+}
+async function restorePartitionCookies(partition, cookies) {
+  if (!Array.isArray(cookies) || cookies.length === 0) {
+    return 0;
+  }
+  const ses = import_electron.session.fromPartition(partition);
+  if (!ses.cookies || typeof ses.cookies.set !== "function") {
+    return 0;
+  }
+  let restored = 0;
+  for (const cookie of cookies) {
+    const url = cookieUrlFromCookie(cookie);
+    if (!url || !cookie?.name) {
+      continue;
+    }
+    try {
+      await ses.cookies.set({
+        url,
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        expirationDate: cookie.expirationDate,
+        sameSite: cookie.sameSite
+      });
+      restored += 1;
+    } catch {
+    }
+  }
+  if (ses.cookies && typeof ses.cookies.flushStore === "function") {
+    await ses.cookies.flushStore();
+  }
+  return restored;
+}
+function importRows(tableName, rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  const allowedTables = /* @__PURE__ */ new Set([
+    "history",
+    "downloads",
+    "saved_passwords",
+    "actions",
+    "tabs"
+  ]);
+  if (!allowedTables.has(tableName)) return;
+  const columns = memoryDb_default.prepare(`PRAGMA table_info(${tableName})`).all().map((c) => c.name);
+  for (const row of rows) {
+    const rowColumns = columns.filter(
+      (column) => Object.prototype.hasOwnProperty.call(row, column)
+    );
+    if (rowColumns.length === 0) continue;
+    const placeholders = rowColumns.map(() => "?").join(", ");
+    const values = rowColumns.map((column) => row[column]);
+    const updateSet = rowColumns.filter((column) => column !== "id").map((column) => `${column} = excluded.${column}`).join(", ");
+    const sql = `
+      INSERT INTO ${tableName} (${rowColumns.join(", ")})
+      VALUES (${placeholders})
+      ON CONFLICT(id) DO ${updateSet ? `UPDATE SET ${updateSet}` : "NOTHING"}
+    `;
+    try {
+      memoryDb_default.prepare(sql).run(...values);
+    } catch {
+    }
+  }
+}
+async function exportFullProfileBackup(password) {
+  if (!password || password.length < 8) {
+    throw new Error("BACKUP_PASSWORD_TOO_SHORT");
+  }
+  const profiles = profileStore.list();
+  const activeProfileId = profileStore.getActiveId();
+  for (const profile of profiles) {
+    try {
+      const ses = import_electron.session.fromPartition(profile.partition);
+      if (typeof ses.flushStorageData === "function") {
+        await ses.flushStorageData();
+      }
+      if (ses.cookies && typeof ses.cookies.flushStore === "function") {
+        await ses.cookies.flushStore();
+      }
+    } catch {
+    }
+  }
+  const sessions = [];
+  for (const profile of profiles) {
+    const cookies = await snapshotPartitionCookies(profile.partition);
+    const partitionDir = findPartitionDir(profile.partition);
+    if (!partitionDir) {
+      sessions.push({
+        profileId: profile.id,
+        partition: profile.partition,
+        found: false,
+        files: [],
+        cookies,
+        warning: "Partition folder not found. Session data may not have been written yet.",
+        candidates: getCandidatePartitionDirs(profile.partition)
+      });
+      continue;
+    }
+    const snapshot = readDirAsBackupFiles(partitionDir);
+    sessions.push({
+      profileId: profile.id,
+      partition: profile.partition,
+      found: true,
+      files: snapshot.files,
+      cookies,
+      warnings: snapshot.warnings
+    });
+  }
+  const payload = {
+    schemaVersion: SCHEMA_VERSION,
+    app: "glassbox-browser",
+    exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    activeProfileId,
+    profiles,
+    sqlite: {
+      history: memoryDb_default.prepare("SELECT * FROM history").all(),
+      downloads: memoryDb_default.prepare("SELECT * FROM downloads").all(),
+      saved_passwords: memoryDb_default.prepare("SELECT * FROM saved_passwords").all(),
+      actions: memoryDb_default.prepare("SELECT * FROM actions").all(),
+      tabs: memoryDb_default.prepare("SELECT * FROM tabs").all()
+    },
+    sessions,
+    warning: "This backup may contain cookies and login session tokens. Some websites may still require re-login after restore."
+  };
+  return encryptPayload(payload, password);
+}
+async function importFullProfileBackup(backup, password) {
+  if (!password) {
+    throw new Error("BACKUP_PASSWORD_REQUIRED");
+  }
+  const payload = decryptPayload(backup, password);
+  if (!payload || payload.app !== "glassbox-browser" || payload.schemaVersion !== SCHEMA_VERSION) {
+    throw new Error("INVALID_BACKUP_PAYLOAD");
+  }
+  const profiles = Array.isArray(payload.profiles) ? payload.profiles : [];
+  const sqlite = payload.sqlite || {};
+  const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  for (const profile of profiles) {
+    try {
+      const tabs = tabManager.getAllTabs().filter((tab) => tab.profileId === profile.id);
+      for (const tab of tabs) {
+        await tabManager.closeTab(tab.tabId);
+      }
+    } catch {
+    }
+  }
+  const tx = memoryDb_default.transaction(() => {
+    for (const profile of profiles) {
+      if (!profile.id || !profile.name) continue;
+      const partition = profile.partition || `persist:gb-profile-${profile.id}`;
+      const importedEmail = typeof profile.email === "string" ? profile.email.trim() : "";
+      const emailToStore = profile.id === "default" ? importedEmail || null : importedEmail || `missing-email+${profile.id}@glassbox.local`;
+      memoryDb_default.prepare(`
+        INSERT INTO profiles (id, name, email, partition, created_at)
+        VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          email = excluded.email,
+          partition = excluded.partition
+      `).run(
+        profile.id,
+        profile.name,
+        emailToStore,
+        partition,
+        profile.created_at || null
+      );
+    }
+    importRows("history", sqlite.history);
+    importRows("downloads", sqlite.downloads);
+    importRows("saved_passwords", sqlite.saved_passwords);
+    importRows("actions", sqlite.actions);
+    importRows("tabs", sqlite.tabs);
+    if (payload.activeProfileId) {
+      try {
+        profileStore.setActive(payload.activeProfileId);
+      } catch {
+      }
+    }
+  });
+  tx();
+  let restoredSessions = 0;
+  for (const item of sessions) {
+    if (!item.partition) continue;
+    let restored = false;
+    if (Array.isArray(item.files)) {
+      const targetDir = getCandidatePartitionDirs(item.partition)[0];
+      try {
+        if (import_fs2.default.existsSync(targetDir)) {
+          import_fs2.default.rmSync(targetDir, { recursive: true, force: true });
+        }
+        restoreBackupFiles(targetDir, item.files);
+        restored = restored || item.files.length > 0;
+      } catch {
+      }
+    }
+    const restoredCookies = await restorePartitionCookies(item.partition, item.cookies);
+    if (restored || restoredCookies > 0) {
+      restoredSessions += 1;
+    }
+  }
+  return {
+    success: true,
+    importedProfiles: profiles.length,
+    restoredSessions,
+    activeProfileId: profileStore.getActiveId(),
+    restartRecommended: restoredSessions > 0
+  };
+}
+
 // src/lib/urlUtils.ts
 var SEARCH_ENGINES = {
   duckduckgo: (query) => `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
   google: (query) => `https://www.google.com/search?q=${encodeURIComponent(query)}`,
   bing: (query) => `https://www.bing.com/search?q=${encodeURIComponent(query)}`
+};
+var SITE_ALIASES = {
+  google: "https://www.google.com/",
+  facebook: "https://www.facebook.com/",
+  fb: "https://www.facebook.com/",
+  youtube: "https://www.youtube.com/",
+  yt: "https://www.youtube.com/",
+  gmail: "https://mail.google.com/",
+  mail: "https://mail.google.com/",
+  chatgpt: "https://chatgpt.com/",
+  openai: "https://chatgpt.com/",
+  gemini: "https://gemini.google.com/",
+  github: "https://github.com/",
+  git: "https://github.com/",
+  x: "https://x.com/",
+  twitter: "https://x.com/",
+  linkedin: "https://www.linkedin.com/",
+  reddit: "https://www.reddit.com/",
+  instagram: "https://www.instagram.com/",
+  whatsapp: "https://web.whatsapp.com/",
+  telegram: "https://web.telegram.org/",
+  discord: "https://discord.com/app",
+  notion: "https://www.notion.so/",
+  drive: "https://drive.google.com/",
+  gdrive: "https://drive.google.com/",
+  docs: "https://docs.google.com/",
+  sheets: "https://sheets.google.com/",
+  maps: "https://maps.google.com/",
+  translate: "https://translate.google.com/",
+  fiverr: "https://www.fiverr.com/",
+  upwork: "https://www.upwork.com/",
+  amazon: "https://www.amazon.com/",
+  netflix: "https://www.netflix.com/",
+  spotify: "https://open.spotify.com/"
 };
 var DEFAULT_SEARCH_ENGINE = "duckduckgo";
 function normalizeUrl(url = "") {
@@ -25734,6 +26168,7 @@ function search(query, engine = DEFAULT_SEARCH_ENGINE) {
   const searchFn = SEARCH_ENGINES[engine] || SEARCH_ENGINES[DEFAULT_SEARCH_ENGINE];
   return searchFn(query);
 }
+var SITE_ALIAS_OPTIONS = Object.keys(SITE_ALIASES);
 
 // src/server/actionExecutor.ts
 var ActionExecutor = class {
@@ -25927,7 +26362,7 @@ var MemoryService = class {
 var memoryService = new MemoryService();
 
 // src/server/vlmPageApi.ts
-var import_crypto = require("crypto");
+var import_crypto2 = require("crypto");
 function getTabOrThrow(tabId) {
   const tab = tabManager.getTab(tabId);
   if (!tab) {
@@ -25953,7 +26388,7 @@ async function getDomHash(tab) {
       "document.documentElement.outerHTML",
       true
     );
-    return (0, import_crypto.createHash)("sha256").update(String(html || "")).digest("hex");
+    return (0, import_crypto2.createHash)("sha256").update(String(html || "")).digest("hex");
   } catch {
     return "unavailable";
   }
@@ -26424,18 +26859,18 @@ function startApiServer(port = 3e3) {
     return serverPromise;
   }
   serverPromise = (async () => {
-    const app3 = (0, import_express.default)();
-    app3.use((0, import_cors.default)());
-    app3.use(import_express.default.json());
-    app3.get("/api/profiles", (_req, res) => {
+    const app4 = (0, import_express.default)();
+    app4.use((0, import_cors.default)());
+    app4.use(import_express.default.json());
+    app4.get("/api/profiles", (_req, res) => {
       res.json(profileStore.list());
     });
-    app3.get("/api/settings", (_req, res) => {
+    app4.get("/api/settings", (_req, res) => {
       res.json({
         activeProfileId: profileStore.getActiveId()
       });
     });
-    app3.put("/api/settings", (req, res) => {
+    app4.put("/api/settings", (req, res) => {
       try {
         const activeProfileId = req.body?.activeProfileId ?? req.body?.activeProfile;
         const profile = profileStore.setActive(activeProfileId);
@@ -26444,26 +26879,161 @@ function startApiServer(port = 3e3) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/profiles", (req, res) => {
+    app4.post("/api/profiles", (req, res) => {
       try {
         const name = typeof req.body?.name === "string" ? req.body.name : "";
         const id = typeof req.body?.id === "string" ? req.body.id : void 0;
-        const profile = profileStore.create(name, id);
+        const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          res.status(400).json({
+            error: "INVALID_EMAIL",
+            message: "Enter a valid email address."
+          });
+          return;
+        }
+        const profile = profileStore.create(name, id, email);
         res.json(profile);
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.patch("/api/profiles/:id", (req, res) => {
+    app4.patch("/api/profiles/:id", (req, res) => {
       try {
-        const name = typeof req.body?.name === "string" ? req.body.name : "";
-        const profile = profileStore.rename(req.params.id, name);
+        const profile = profileStore.update(req.params.id, {
+          name: typeof req.body?.name === "string" ? req.body.name : void 0
+        });
         res.json({ success: true, ...profile });
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.delete("/api/profiles/:id", async (req, res) => {
+    app4.post("/api/profiles/:id/detect-email", async (req, res) => {
+      try {
+        const profile = profileStore.get(req.params.id);
+        if (!profile) {
+          res.status(404).json({ error: "PROFILE_NOT_FOUND" });
+          return;
+        }
+        if (profile.id === "default") {
+          res.json({
+            success: false,
+            reason: "DEFAULT_PROFILE_EMAIL_OPTIONAL",
+            email: null
+          });
+          return;
+        }
+        const profileTabs = tabManager.getAllTabs().filter((tab2) => tab2.profileId === profile.id);
+        if (profileTabs.length === 0) {
+          res.json({
+            success: false,
+            reason: "NO_PROFILE_TAB",
+            email: null
+          });
+          return;
+        }
+        const activeTabId = tabManager.getActiveTabId?.();
+        const selectedTab = profileTabs.find((tab2) => tab2.tabId === activeTabId) || profileTabs.find((tab2) => {
+          try {
+            const detectedHost = new URL(tab2.url).hostname.toLowerCase();
+            return detectedHost === "mail.google.com" || detectedHost === "accounts.google.com" || detectedHost === "myaccount.google.com" || detectedHost === "www.google.com" || detectedHost === "google.com";
+          } catch {
+            return false;
+          }
+        }) || profileTabs[0];
+        const tab = tabManager.getTab(selectedTab.tabId);
+        if (!tab) {
+          res.json({
+            success: false,
+            reason: "TAB_NOT_FOUND",
+            email: null
+          });
+          return;
+        }
+        const currentUrl = tab.webContents.getURL();
+        let host = "";
+        try {
+          host = new URL(currentUrl).hostname.toLowerCase();
+        } catch {
+          host = "";
+        }
+        const trustedGoogleHosts = /* @__PURE__ */ new Set([
+          "accounts.google.com",
+          "myaccount.google.com",
+          "mail.google.com",
+          "www.google.com",
+          "google.com"
+        ]);
+        if (!trustedGoogleHosts.has(host)) {
+          res.json({
+            success: false,
+            reason: "NOT_GOOGLE_IDENTITY_PAGE",
+            url: currentUrl,
+            email: null
+          });
+          return;
+        }
+        const email = await tab.webContents.executeJavaScript(`
+          (() => {
+            const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig;
+
+            const candidates = new Set();
+
+            const add = (value) => {
+              if (!value || typeof value !== 'string') return;
+              const matches = value.match(emailRegex);
+              if (!matches) return;
+              for (const match of matches) {
+                candidates.add(match.toLowerCase());
+              }
+            };
+
+            add(document.body?.innerText || '');
+            add(document.title || '');
+
+            for (const el of Array.from(document.querySelectorAll('[aria-label], [title], [data-email], [href], [email]'))) {
+              add(el.getAttribute('aria-label'));
+              add(el.getAttribute('title'));
+              add(el.getAttribute('data-email'));
+              add(el.getAttribute('email'));
+              add(el.getAttribute('href'));
+              add(el.textContent || '');
+            }
+
+            for (const script of Array.from(document.scripts || [])) {
+              add(script.textContent || '');
+            }
+
+            const list = Array.from(candidates);
+
+            const preferred = list.find((detectedEmail) =>
+              detectedEmail.endsWith('@gmail.com') ||
+              detectedEmail.endsWith('@googlemail.com')
+            );
+
+            return preferred || list[0] || null;
+          })();
+        `, true);
+        if (!email || typeof email !== "string") {
+          res.json({
+            success: false,
+            reason: "EMAIL_NOT_FOUND_ON_PAGE",
+            url: currentUrl,
+            email: null
+          });
+          return;
+        }
+        const updated = profileStore.setEmail(profile.id, email);
+        res.json({
+          success: true,
+          email,
+          profile: updated,
+          sourceUrl: currentUrl
+        });
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app4.delete("/api/profiles/:id", async (req, res) => {
       try {
         const profile = profileStore.get(req.params.id);
         if (!profile) {
@@ -26484,7 +27054,7 @@ function startApiServer(port = 3e3) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/profiles/:id/open", (req, res) => {
+    app4.post("/api/profiles/:id/open", (req, res) => {
       try {
         const profile = profileStore.setActive(req.params.id);
         const initialUrl = typeof req.body?.url === "string" ? req.body.url : void 0;
@@ -26498,10 +27068,29 @@ function startApiServer(port = 3e3) {
         errorResponse(res, error);
       }
     });
-    app3.get("/api/tabs", (_req, res) => {
+    app4.post("/api/profiles/export-full", async (req, res) => {
+      try {
+        const password = typeof req.body?.password === "string" ? req.body.password : "";
+        const backup = await exportFullProfileBackup(password);
+        res.json(backup);
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app4.post("/api/profiles/import-full", async (req, res) => {
+      try {
+        const password = typeof req.body?.password === "string" ? req.body.password : "";
+        const backup = req.body?.backup;
+        const result = await importFullProfileBackup(backup, password);
+        res.json(result);
+      } catch (error) {
+        errorResponse(res, error);
+      }
+    });
+    app4.get("/api/tabs", (_req, res) => {
       res.json(tabManager.getAllTabs());
     });
-    app3.post("/api/tabs", (req, res) => {
+    app4.post("/api/tabs", (req, res) => {
       try {
         const profileId = resolveProfileId(req.body?.profileId);
         const initialUrl = typeof req.body?.url === "string" ? req.body.url : typeof req.body?.initialUrl === "string" ? req.body.initialUrl : void 0;
@@ -26511,36 +27100,36 @@ function startApiServer(port = 3e3) {
         errorResponse(res, error);
       }
     });
-    app3.delete("/api/tabs/:id", async (req, res) => {
+    app4.delete("/api/tabs/:id", async (req, res) => {
       const result = await tabManager.closeTab(req.params.id);
       res.json({ success: true, nextActiveTabId: result.nextActiveTabId });
     });
-    app3.put("/api/tabs/:id/focus", (req, res) => {
+    app4.put("/api/tabs/:id/focus", (req, res) => {
       try {
         res.json({ success: true, tab: tabManager.focusTab(req.params.id) });
       } catch (error) {
         errorResponse(res, error, 404);
       }
     });
-    app3.get("/api/tabs/:id/dom", (req, res) => {
+    app4.get("/api/tabs/:id/dom", (req, res) => {
       const tab = tabManager.getTab(req.params.id);
       res.json(tab?.elements || []);
     });
-    app3.get("/api/tabs/:id/html", async (req, res) => {
+    app4.get("/api/tabs/:id/html", async (req, res) => {
       try {
         res.json(await vlmPageApi.getHtml(req.params.id));
       } catch (error) {
         errorResponse(res, error, 404);
       }
     });
-    app3.post("/api/tabs/:id/query", async (req, res) => {
+    app4.post("/api/tabs/:id/query", async (req, res) => {
       try {
         res.json(await vlmPageApi.query(req.params.id, req.body || {}));
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.get("/api/tabs/:id/screenshot", async (req, res) => {
+    app4.get("/api/tabs/:id/screenshot", async (req, res) => {
       try {
         const screenshot = await vlmPageApi.screenshot(req.params.id, {
           selector: typeof req.query.selector === "string" ? req.query.selector : void 0,
@@ -26559,49 +27148,49 @@ function startApiServer(port = 3e3) {
         errorResponse(res, error, 404);
       }
     });
-    app3.post("/api/tabs/:id/style", async (req, res) => {
+    app4.post("/api/tabs/:id/style", async (req, res) => {
       try {
         res.json(await vlmPageApi.style(req.params.id, req.body || {}));
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.get("/api/tabs/:id/a11y", async (req, res) => {
+    app4.get("/api/tabs/:id/a11y", async (req, res) => {
       try {
         res.json(await vlmPageApi.a11y(req.params.id));
       } catch (error) {
         errorResponse(res, error, 404);
       }
     });
-    app3.post("/api/tabs/:id/action/click", async (req, res) => {
+    app4.post("/api/tabs/:id/action/click", async (req, res) => {
       try {
         res.json(await vlmPageApi.click(req.params.id, req.body || {}));
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/tabs/:id/action/type", async (req, res) => {
+    app4.post("/api/tabs/:id/action/type", async (req, res) => {
       try {
         res.json(await vlmPageApi.type(req.params.id, req.body || {}));
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/tabs/:id/action/scroll", async (req, res) => {
+    app4.post("/api/tabs/:id/action/scroll", async (req, res) => {
       try {
         res.json(await vlmPageApi.scroll(req.params.id, req.body || {}));
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/tabs/:id/action/navigate", async (req, res) => {
+    app4.post("/api/tabs/:id/action/navigate", async (req, res) => {
       try {
         res.json(await vlmPageApi.navigate(req.params.id, req.body || {}));
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/tabs/:id/action/wait", async (req, res) => {
+    app4.post("/api/tabs/:id/action/wait", async (req, res) => {
       try {
         const result = await vlmPageApi.wait(req.params.id, req.body || {});
         if (!result.ok && result.reason === "timeout") {
@@ -26613,14 +27202,14 @@ function startApiServer(port = 3e3) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/tabs/:id/action/evaluate", async (req, res) => {
+    app4.post("/api/tabs/:id/action/evaluate", async (req, res) => {
       try {
         res.json(await vlmPageApi.evaluate(req.params.id, req.body || {}));
       } catch (error) {
         errorResponse(res, error);
       }
     });
-    app3.post("/api/actions", async (req, res) => {
+    app4.post("/api/actions", async (req, res) => {
       try {
         const tabId = req.body?.tabId;
         if (!tabId) {
@@ -26662,13 +27251,13 @@ function startApiServer(port = 3e3) {
         res.status(400).json({ error: error.message });
       }
     });
-    app3.get("/api/memory/search", async (req, res) => {
+    app4.get("/api/memory/search", async (req, res) => {
       const query = typeof req.query.q === "string" ? req.query.q : "";
       const profileId = resolveProfileId(req.query.profileId);
       const results = await memoryService.searchMemory(query, profileId);
       res.json(results);
     });
-    app3.get("/api/memory/history", (req, res) => {
+    app4.get("/api/memory/history", (req, res) => {
       const query = typeof req.query.q === "string" ? req.query.q : "";
       const profileId = resolveProfileId(req.query.profileId);
       let sql = "SELECT * FROM history WHERE profile_id = ?";
@@ -26680,12 +27269,12 @@ function startApiServer(port = 3e3) {
       sql += " ORDER BY last_visited DESC LIMIT 50";
       res.json(memoryDb_default.prepare(sql).all(...params));
     });
-    app3.delete("/api/memory/history", (req, res) => {
+    app4.delete("/api/memory/history", (req, res) => {
       const profileId = resolveProfileId(req.query.profileId);
       memoryDb_default.prepare("DELETE FROM history WHERE profile_id = ?").run(profileId);
       res.json({ success: true });
     });
-    app3.get("/api/memory/downloads", (req, res) => {
+    app4.get("/api/memory/downloads", (req, res) => {
       const query = typeof req.query.q === "string" ? req.query.q : "";
       const profileId = resolveProfileId(req.query.profileId);
       let sql = "SELECT * FROM downloads WHERE profile_id = ?";
@@ -26702,12 +27291,12 @@ function startApiServer(port = 3e3) {
       sql += ` ORDER BY ${downloadTimestampColumn || "rowid"} DESC LIMIT 50`;
       res.json(memoryDb_default.prepare(sql).all(...params));
     });
-    app3.delete("/api/memory/downloads", (req, res) => {
+    app4.delete("/api/memory/downloads", (req, res) => {
       const profileId = resolveProfileId(req.query.profileId);
       memoryDb_default.prepare("DELETE FROM downloads WHERE profile_id = ?").run(profileId);
       res.json({ success: true });
     });
-    app3.get("/api/memory/logs", (req, res) => {
+    app4.get("/api/memory/logs", (req, res) => {
       const profileId = resolveProfileId(req.query.profileId);
       if (actionsColumns.length > 0) {
         const intentExpr = actionsColumns.includes("intent") ? "COALESCE(intent, '') AS intent" : "'' AS intent";
@@ -26741,7 +27330,7 @@ function startApiServer(port = 3e3) {
       }
       res.json([]);
     });
-    app3.get("/api/passwords", (req, res) => {
+    app4.get("/api/passwords", (req, res) => {
       const profileId = resolveProfileId(req.query.profileId);
       const passwords = memoryDb_default.prepare(`
         SELECT id, profile_id, origin, username, password, created_at, updated_at
@@ -26751,7 +27340,7 @@ function startApiServer(port = 3e3) {
       `).all(profileId);
       res.json(passwords);
     });
-    app3.post("/api/passwords", (req, res) => {
+    app4.post("/api/passwords", (req, res) => {
       const profileId = resolveProfileId(req.body?.profileId);
       const origin = typeof req.body?.origin === "string" ? req.body.origin.trim() : "";
       const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
@@ -26770,18 +27359,18 @@ function startApiServer(port = 3e3) {
       `).run(id, profileId, origin, username, password);
       res.json({ success: true });
     });
-    app3.delete("/api/passwords/:id", (req, res) => {
+    app4.delete("/api/passwords/:id", (req, res) => {
       memoryDb_default.prepare("DELETE FROM saved_passwords WHERE id = ?").run(req.params.id);
       res.json({ success: true });
     });
     if (process.env.NODE_ENV !== "development") {
-      app3.use(import_express.default.static(import_path3.default.join(process.cwd(), "dist")));
-      app3.get("*", (_req, res) => {
-        res.sendFile(import_path3.default.join(process.cwd(), "dist", "index.html"));
+      app4.use(import_express.default.static(import_path4.default.join(process.cwd(), "dist")));
+      app4.get("*", (_req, res) => {
+        res.sendFile(import_path4.default.join(process.cwd(), "dist", "index.html"));
       });
     }
     await new Promise((resolve, reject) => {
-      const server = app3.listen(port, "127.0.0.1", () => {
+      const server = app4.listen(port, "127.0.0.1", () => {
         console.log(`GlassBox API running on port ${port}`);
         resolve();
       });
@@ -26834,10 +27423,10 @@ function resolveStartupProfile(args) {
   throw new Error(`Startup profile not found: ${args.profile}`);
 }
 async function createWindow() {
-  const isDev = !import_electron.app.isPackaged && process.env.NODE_ENV === "development";
+  const isDev = !import_electron2.app.isPackaged && process.env.NODE_ENV === "development";
   const isWindows = process.platform === "win32";
   const isMac = process.platform === "darwin";
-  mainWindow = new import_electron.BrowserWindow({
+  mainWindow = new import_electron2.BrowserWindow({
     show: true,
     width: 1280,
     height: 800,
@@ -26856,7 +27445,7 @@ async function createWindow() {
     } : false,
     backgroundColor: "#09090B",
     webPreferences: {
-      preload: (0, import_path4.join)(import_electron.app.getAppPath(), "dist-electron", "preload", "preload.cjs"),
+      preload: (0, import_path5.join)(import_electron2.app.getAppPath(), "dist-electron", "preload", "preload.cjs"),
       contextIsolation: true,
       sandbox: false
     }
@@ -26867,14 +27456,14 @@ async function createWindow() {
   });
   await mainWindow.loadURL(isDev ? DEV_APP_URL : PROD_APP_URL);
 }
-import_electron.ipcMain.handle("gb:activate-tab", async (_event, { tabId, bounds }) => {
+import_electron2.ipcMain.handle("gb:activate-tab", async (_event, { tabId, bounds }) => {
   if (!tabId || !bounds) {
     return { success: false, reason: "INVALID_INPUT" };
   }
   tabManager.setActiveTab(tabId, bounds);
   return { success: true };
 });
-import_electron.ipcMain.handle("gb:navigate", async (_event, { tabId, url }) => {
+import_electron2.ipcMain.handle("gb:navigate", async (_event, { tabId, url }) => {
   if (!tabId || !url) {
     return { success: false, reason: "INVALID_INPUT" };
   }
@@ -26884,11 +27473,11 @@ import_electron.ipcMain.handle("gb:navigate", async (_event, { tabId, url }) => 
     return { success: false, reason: error.message || "NAVIGATION_FAILED" };
   }
 });
-import_electron.ipcMain.handle("gb:window-minimize", () => {
+import_electron2.ipcMain.handle("gb:window-minimize", () => {
   mainWindow?.minimize();
   return { success: true };
 });
-import_electron.ipcMain.handle("gb:window-toggle-maximize", () => {
+import_electron2.ipcMain.handle("gb:window-toggle-maximize", () => {
   if (!mainWindow) {
     return { success: false };
   }
@@ -26899,21 +27488,29 @@ import_electron.ipcMain.handle("gb:window-toggle-maximize", () => {
   }
   return { success: true, maximized: mainWindow.isMaximized() };
 });
-import_electron.ipcMain.handle("gb:window-close", () => {
+import_electron2.ipcMain.handle("gb:window-close", () => {
   mainWindow?.close();
   return { success: true };
 });
-import_electron.ipcMain.handle("gb:window-close-tab", async (_event, { tabId }) => {
+import_electron2.ipcMain.handle("gb:window-close-tab", async (_event, { tabId }) => {
   if (!tabId) {
     return { success: false, reason: "INVALID_INPUT" };
   }
   const result = await tabManager.closeTab(tabId);
   return { success: true, nextActiveTabId: result.nextActiveTabId };
 });
-import_electron.ipcMain.on("gb:heartbeat", (event, data) => {
+import_electron2.ipcMain.handle("gb:focus-shell", () => {
+  if (!mainWindow) {
+    return { success: false };
+  }
+  mainWindow.focus();
+  mainWindow.webContents.focus();
+  return { success: true };
+});
+import_electron2.ipcMain.on("gb:heartbeat", (event, data) => {
   tabManager.handleHeartbeat(event.sender, data || {});
 });
-import_electron.app.whenReady().then(async () => {
+import_electron2.app.whenReady().then(async () => {
   const startupArgs = parseStartupArgs(process.argv.slice(1));
   const startupProfile = resolveStartupProfile(startupArgs);
   await startApiServer();
@@ -26927,14 +27524,14 @@ import_electron.app.whenReady().then(async () => {
   }
   console.log("Electron main process ready.");
 });
-import_electron.app.on("activate", async () => {
-  if (import_electron.BrowserWindow.getAllWindows().length === 0) {
+import_electron2.app.on("activate", async () => {
+  if (import_electron2.BrowserWindow.getAllWindows().length === 0) {
     await createWindow();
   }
 });
-import_electron.app.on("window-all-closed", () => {
+import_electron2.app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
-    import_electron.app.quit();
+    import_electron2.app.quit();
   }
 });
 /*! Bundled license information:

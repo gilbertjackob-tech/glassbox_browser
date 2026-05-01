@@ -144,7 +144,6 @@ export default function App() {
   const [profileCreatorEmail, setProfileCreatorEmail] = useState('');
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [editingProfileName, setEditingProfileName] = useState('');
-  const [editingProfileEmail, setEditingProfileEmail] = useState('');
   const [editingProfileBusy, setEditingProfileBusy] = useState(false);
   const [editingProfileError, setEditingProfileError] = useState<string | null>(null);
   const [profileBackupOpen, setProfileBackupOpen] = useState(false);
@@ -154,8 +153,20 @@ export default function App() {
   const [passwordForm, setPasswordForm] = useState({ origin: '', username: '', password: '' });
   const browserViewRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
+  const profileEmailDetectTimerRef = useRef<number | null>(null);
 
   const activeTab = tabs.find((tab) => tab.tabId === activeTabId);
+
+  const focusShell = () => {
+    void (window as any).windowControls?.focusShell?.();
+  };
+
+  const clearProfileEmailDetectLoop = () => {
+    if (profileEmailDetectTimerRef.current !== null) {
+      window.clearTimeout(profileEmailDetectTimerRef.current);
+      profileEmailDetectTimerRef.current = null;
+    }
+  };
 
   const syncBrowserViewBounds = (tabIdToSync: string | null = activeTabId) => {
     if (!tabIdToSync || !browserViewRef.current || !(window as any).glassbox) return;
@@ -258,6 +269,15 @@ export default function App() {
     updateActiveTabData(activeTabId);
   }, [activeTabId]);
 
+  useEffect(() => () => clearProfileEmailDetectLoop(), []);
+
+  useEffect(() => {
+    if (!profileCreatorOpen) return;
+
+    const rafId = requestAnimationFrame(() => focusShell());
+    return () => cancelAnimationFrame(rafId);
+  }, [profileCreatorOpen]);
+
   const fetchAppSettings = async () => {
     const res = await fetch('/api/settings');
     return await res.json();
@@ -302,6 +322,7 @@ export default function App() {
   };
 
   const openProfileCreator = () => {
+    clearProfileEmailDetectLoop();
     setProfileCreatorName('');
     setProfileCreatorEmail('');
     setProfileCreatorStartUrl('https://accounts.google.com/');
@@ -310,11 +331,55 @@ export default function App() {
     setProfileCreatorOpen(true);
   };
 
+  const detectProfileEmailSilently = async (profileId: string) => {
+    try {
+      const res = await fetch(`/api/profiles/${encodeURIComponent(profileId)}/detect-email`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.error || !data.success || !data.email) {
+        return false;
+      }
+
+      await fetchProfiles();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const startProfileEmailAutoDetect = (profileId: string, attemptsLeft = 120) => {
+    clearProfileEmailDetectLoop();
+
+    const run = async () => {
+      const detected = await detectProfileEmailSilently(profileId);
+      if (detected || attemptsLeft <= 1) {
+        clearProfileEmailDetectLoop();
+        return;
+      }
+
+      profileEmailDetectTimerRef.current = window.setTimeout(() => {
+        startProfileEmailAutoDetect(profileId, attemptsLeft - 1);
+      }, 3000);
+    };
+
+    profileEmailDetectTimerRef.current = window.setTimeout(() => {
+      void run();
+    }, 2000);
+  };
+
   const createProfile = async () => {
     const name = profileCreatorName.trim();
+    const email = profileCreatorEmail.trim();
 
     if (!name) {
       setProfileCreatorError('Profile name is required.');
+      return;
+    }
+
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setProfileCreatorError('Enter a valid email address.');
       return;
     }
 
@@ -325,7 +390,7 @@ export default function App() {
       const createRes = await fetch('/api/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email: profileCreatorEmail.trim() || undefined }),
+        body: JSON.stringify({ name, email: email || undefined }),
       });
 
       const newProfile = await createRes.json();
@@ -365,6 +430,10 @@ export default function App() {
 
       setProfileCreatorOpen(false);
 
+      if (!email) {
+        startProfileEmailAutoDetect(newProfile.id);
+      }
+
       requestAnimationFrame(() => syncBrowserViewBounds(openData.tabId || openData.id));
     } catch (error: any) {
       setProfileCreatorError(error?.message || 'Could not create profile.');
@@ -376,20 +445,17 @@ export default function App() {
   const startProfileEdit = (profile: Profile) => {
     setEditingProfileId(profile.id);
     setEditingProfileName(profile.name || '');
-    setEditingProfileEmail(profile.email || '');
     setEditingProfileError(null);
   };
 
   const cancelProfileEdit = () => {
     setEditingProfileId(null);
     setEditingProfileName('');
-    setEditingProfileEmail('');
     setEditingProfileError(null);
   };
 
   const saveProfileEdit = async (profileId: string) => {
     const nextName = editingProfileName.trim();
-    const nextEmail = editingProfileEmail.trim();
 
     if (!nextName) {
       setEditingProfileError('Profile name is required.');
@@ -403,7 +469,7 @@ export default function App() {
       const res = await fetch(`/api/profiles/${encodeURIComponent(profileId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nextName, email: nextEmail }),
+        body: JSON.stringify({ name: nextName }),
       });
 
       const data = await res.json();
@@ -417,6 +483,40 @@ export default function App() {
       setEditingProfileError(error?.message || 'Could not save profile.');
     } finally {
       setEditingProfileBusy(false);
+    }
+  };
+
+  const detectProfileEmail = async (profileId: string) => {
+    try {
+      clearProfileEmailDetectLoop();
+      const res = await fetch(`/api/profiles/${encodeURIComponent(profileId)}/detect-email`, {
+        method: 'POST',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        alert(data.message || data.error || 'Could not detect email.');
+        return;
+      }
+
+      if (!data.success) {
+        const messages: Record<string, string> = {
+          NOT_GOOGLE_IDENTITY_PAGE: 'Open Gmail, Google, or Google Account page in this profile first, then try again.',
+          EMAIL_NOT_FOUND_ON_PAGE: 'Could not find an email on this Google page. Click your Google avatar/account icon, then try again.',
+          NO_PROFILE_TAB: 'No tab found for this profile.',
+          TAB_NOT_FOUND: 'Profile tab was not found.',
+          DEFAULT_PROFILE_EMAIL_OPTIONAL: 'Default profile does not need an email.',
+        };
+
+        alert(messages[data.reason] || data.reason || 'Could not detect email.');
+        return;
+      }
+
+      await fetchProfiles();
+      alert(`Detected email: ${data.email}`);
+    } catch {
+      alert('Could not detect email.');
     }
   };
 
@@ -958,13 +1058,13 @@ export default function App() {
         </div>
 
         <div className="relative z-50 flex min-w-0 items-center gap-2 overflow-visible border-t border-gb-border bg-gb-bg p-2">
-          <div className="flex shrink-0 gap-2 px-1 text-gb-text-dim">
-            <button className="p-1 transition-colors hover:text-gb-text" title="Back"><ArrowLeft size={16} /></button>
-            <button className="p-1 transition-colors hover:text-gb-text" title="Forward"><ArrowRight size={16} /></button>
-            <button className="p-1 transition-colors hover:text-gb-text" title="Reload"><RotateCw size={16} /></button>
+          <div className="no-drag flex shrink-0 gap-2 px-1 text-gb-text-dim">
+            <button className="no-drag p-1 transition-colors hover:text-gb-text" title="Back" onMouseDown={focusShell}><ArrowLeft size={16} /></button>
+            <button className="no-drag p-1 transition-colors hover:text-gb-text" title="Forward" onMouseDown={focusShell}><ArrowRight size={16} /></button>
+            <button className="no-drag p-1 transition-colors hover:text-gb-text" title="Reload" onMouseDown={focusShell}><RotateCw size={16} /></button>
           </div>
 
-          <div className="group flex min-w-[180px] flex-1 items-center rounded-full border border-gb-border bg-gb-surface px-4 py-1.5 transition-colors focus-within:border-gb-accent-primary">
+          <div className="group no-drag flex min-w-[180px] flex-1 items-center rounded-full border border-gb-border bg-gb-surface px-4 py-1.5 transition-colors focus-within:border-gb-accent-primary" onMouseDown={focusShell}>
             <span className="mr-2 shrink-0 text-xs text-gb-accent-success">LOCKED</span>
             <input
               type="text"
@@ -972,7 +1072,9 @@ export default function App() {
               placeholder="https://..."
               onChange={(e) => setUrlInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && navigate()}
-              className="h-4 min-w-0 flex-1 border-none bg-transparent p-0 font-mono text-[11px] text-gb-text outline-none placeholder:text-gb-text-dim"
+              onFocus={focusShell}
+              onMouseDown={focusShell}
+              className="no-drag h-4 min-w-0 flex-1 border-none bg-transparent p-0 font-mono text-[11px] text-gb-text outline-none placeholder:text-gb-text-dim"
             />
             {navError && <span className="ml-2 max-w-[150px] truncate text-[10px] text-red-400" title={navError}>{navError}</span>}
             {isNavigating && <RotateCw size={12} className="ml-2 animate-spin text-gb-accent-primary" />}
@@ -980,7 +1082,8 @@ export default function App() {
           
           <button
               onClick={navigate}
-              className="shrink-0 rounded bg-gb-accent-primary px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-blue-500" type="button">
+              onMouseDown={focusShell}
+              className="no-drag shrink-0 rounded bg-gb-accent-primary px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-blue-500" type="button">
               Go
           </button>
 
@@ -1132,22 +1235,28 @@ export default function App() {
                                 type="text"
                                 value={editingProfileName}
                                 onChange={(e) => setEditingProfileName(e.target.value)}
+                                onFocus={focusShell}
+                                onMouseDown={focusShell}
                                 placeholder="Profile name"
-                                className="w-full rounded border border-gb-border bg-gb-bg px-2 py-1 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
-                              />
-                              <input
-                                type="email"
-                                value={editingProfileEmail}
-                                onChange={(e) => setEditingProfileEmail(e.target.value)}
-                                placeholder="Email caption"
-                                className="w-full rounded border border-gb-border bg-gb-bg px-2 py-1 text-[10px] text-gb-text outline-none focus:border-gb-accent-primary"
+                                className="no-drag w-full rounded border border-gb-border bg-gb-bg px-2 py-1 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
                               />
                               {editingProfileError && <div className="text-[10px] text-red-400">{editingProfileError}</div>}
                             </div>
                           ) : (
                             <>
-                              <div className="truncate text-[11px] font-semibold text-gb-text">{profile.name}</div>
-                              <div className="truncate text-[10px] text-gb-text-dim">{(profile.email || '').trim() || (profile.id === 'default' ? 'Default local profile' : profile.id)}</div>
+                              <div className="text-sm font-semibold text-gb-text">{profile.name}</div>
+                              <div className="mt-1 truncate text-xs text-gb-text-dim">
+                                {profile.email || (profile.id === 'default' ? 'Default local profile' : 'No connected email')}
+                              </div>
+                              {profile.id !== 'default' && !profile.email && (
+                                <button
+                                  type="button"
+                                  onClick={() => detectProfileEmail(profile.id)}
+                                  className="mt-1 rounded-md border border-gb-border px-2 py-1 text-[10px] font-semibold text-gb-text-dim transition-colors hover:bg-gb-surface-bright hover:text-gb-text"
+                                >
+                                  Detect email
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -1377,24 +1486,31 @@ export default function App() {
               autoFocus
               value={profileCreatorName}
               onChange={(e) => setProfileCreatorName(e.target.value)}
+              onFocus={focusShell}
+              onMouseDown={focusShell}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   createProfile();
                 }
               }}
               placeholder="Work, Personal, Fiverr, Research..."
-              className="mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+              className="no-drag mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
             />
             <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-gb-text-dim">
-              Email caption
+              Connected email / account identity
             </label>
             <input
               type="email"
               value={profileCreatorEmail}
               onChange={(e) => setProfileCreatorEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+              onFocus={focusShell}
+              onMouseDown={focusShell}
+              placeholder="example@gmail.com"
+              className="no-drag mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
             />
+            <p className="mt-1 text-[10px] text-gb-text-dim">
+              Optional at creation. You can detect it after logging into Gmail/Google in this profile.
+            </p>
 
             <div className="mt-4 rounded-lg border border-gb-border bg-gb-bg p-3">
               <label className="flex cursor-pointer items-start gap-3">
@@ -1420,8 +1536,10 @@ export default function App() {
                   <input
                     value={profileCreatorStartUrl}
                     onChange={(e) => setProfileCreatorStartUrl(e.target.value)}
+                    onFocus={focusShell}
+                    onMouseDown={focusShell}
                     placeholder="https://accounts.google.com/"
-                    className="mt-1 w-full rounded-md border border-gb-border bg-gb-surface px-2 py-1.5 text-xs text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+                    className="no-drag mt-1 w-full rounded-md border border-gb-border bg-gb-surface px-2 py-1.5 text-xs text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
                   />
                 </div>
               )}
