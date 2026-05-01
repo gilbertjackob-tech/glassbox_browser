@@ -68,8 +68,9 @@ async function createWindow() {
   const isMac = process.platform === 'darwin';
 
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    show: true,
+    width: 1280,
+    height: 800,
     minWidth: 1100,
     minHeight: 700,
     useContentSize: true,
@@ -163,14 +164,15 @@ app.whenReady().then(async () => {
   const startupProfile = resolveStartupProfile(startupArgs);
 
   await startApiServer();
+  await createWindow();
 
   if (startupProfile && startupArgs.url) {
-    tabManager.createTabSync(startupProfile.id, startupArgs.url);
+    const tabId = tabManager.createTabSync(startupProfile.id, startupArgs.url);
+    tabManager.focusTab(tabId);
   } else if (!startupArgs.noDefaultTab && tabManager.getAllTabs().length === 0) {
-    tabManager.createTabSync(startupProfile?.id || 'default');
+    const tabId = tabManager.createTabSync(startupProfile?.id || 'default');
+    tabManager.focusTab(tabId);
   }
-
-  await createWindow();
 
   console.log('Electron main process ready.');
 });

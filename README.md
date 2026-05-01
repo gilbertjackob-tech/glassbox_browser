@@ -3,16 +3,17 @@
 An automation-native browser shell where the agent is the user. GlassBox provides deep transparency into DOM, session memory, and action verification.
 
 ## 🚀 Key Features
-- **Remote Headless Control**: Playwright-powered engine running on the server.
+- **Native Browser Control**: Each tab is a visible Electron BrowserView. The agent controls the live GUI window - nothing runs headlessly.
 - **GlassBox DOM**: Every element is inspected for role, text, and bounding box.
 - **Action Contracts**: "No success without evidence". Every action (click/type) is verified and logged to a SQLite memory database.
 - **Profile Partitioning**: SQLite-driven profiles with isolated sessions.
 - **Technical UI**: A high-density "Mission Control" interface for monitoring automation.
 
 ## 📁 Architecture
-- `src/main/main.ts`: Electron entry point and API server.
-- `src/server/tabManager.ts`: Lifecycle management for BrowserTabs (via Electron BrowserView).
-- `src/server/actionExecutor.ts`: Strategic engine for performing and verifying actions.
+- `src/main/main.ts`: Electron entry point and visible window lifecycle.
+- `src/main/apiServer.ts`: Local Express API server.
+- `src/server/tabManager.ts`: Lifecycle management for visible Electron BrowserView tabs.
+- `src/server/vlmPageApi.ts`: Glass-box perception and VLM action API.
 - `src/main/memoryDb.ts`: Core SQLite persistence for GlassBox memory.
 - `src/App.tsx`: React-based control shell.
 

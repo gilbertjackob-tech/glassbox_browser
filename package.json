@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist-electron/main/main.cjs",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "tsx scripts/dev-server.ts",
     "renderer:dev": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build && esbuild src/main/main.ts src/preload/preload.ts --bundle --platform=node --outdir=dist-electron --format=cjs --out-extension:.js=.cjs --external:electron --external:better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
@@ -27,7 +27,6 @@
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "playwright-chromium": "^1.59.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "uuid": "^14.0.0",

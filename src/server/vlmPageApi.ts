@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import db from '../main/memoryDb.js';
@@ -26,14 +27,63 @@ function pageScript(fn: (...args: any[]) => any, args: any[] = []) {
 }
 
 async function runInPage<T>(tab: TabMetadata, fn: (...args: any[]) => T, args: any[] = []): Promise<T> {
-  return await tab.view.webContents.executeJavaScript(pageScript(fn, args), true);
+  return await tab.webContents.executeJavaScript(pageScript(fn, args), true);
 }
 
-function logAction(tab: TabMetadata, type: string, target: unknown, value: unknown, success: boolean, reason: string, evidence: unknown) {
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getDomHash(tab: TabMetadata): Promise<string> {
+  if (tab.domHash) {
+    return tab.domHash;
+  }
+
+  try {
+    const html = await tab.webContents.executeJavaScript(
+      'document.documentElement.outerHTML',
+      true
+    );
+
+    return createHash('sha256').update(String(html || '')).digest('hex');
+  } catch {
+    return 'unavailable';
+  }
+}
+
+async function collectActionEvidence(
+  tab: TabMetadata,
+  before?: { url: string; domHash: string },
+  extra: Record<string, unknown> = {}
+) {
+  return {
+    beforeUrl: before?.url ?? null,
+    afterUrl: tab.webContents.getURL(),
+    beforeDomHash: before?.domHash ?? null,
+    afterDomHash: await getDomHash(tab),
+    ...extra,
+  };
+}
+
+async function logAction(tab: TabMetadata, type: string, target: unknown, value: unknown, success: boolean, reason: string, evidence: any) {
   try {
     db.prepare(`
-      INSERT INTO actions (id, tab_id, profile_id, type, target, value, success, reason)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO actions (
+        id,
+        tab_id,
+        profile_id,
+        type,
+        target,
+        value,
+        success,
+        reason,
+        before_url,
+        after_url,
+        before_dom_hash,
+        after_dom_hash,
+        evidence_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       uuidv4(),
       tab.id,
@@ -42,7 +92,12 @@ function logAction(tab: TabMetadata, type: string, target: unknown, value: unkno
       target == null ? null : JSON.stringify(target),
       value == null ? null : String(value),
       success ? 1 : 0,
-      reason || JSON.stringify(evidence || {})
+      reason || '',
+      evidence?.beforeUrl ?? null,
+      evidence?.afterUrl ?? null,
+      evidence?.beforeDomHash ?? null,
+      evidence?.afterDomHash ?? null,
+      JSON.stringify(evidence || {})
     );
   } catch (error) {
     console.warn('Failed to log VLM action', error);
@@ -109,7 +164,7 @@ export const vlmPageApi = {
     const html = await runInPage(tab, () => document.documentElement.outerHTML);
     return {
       tabId,
-      url: tab.view.webContents.getURL(),
+      url: tab.webContents.getURL(),
       title: tab.title,
       html,
       capturedAt: Date.now(),
@@ -125,15 +180,24 @@ export const vlmPageApi = {
       throw new Error('SELECTOR_OR_XPATH_REQUIRED');
     }
 
-    const elements = await runInPage(tab, (input: { selector: string; xpath: string; limit: number }) => {
+    const elements: any = await runInPage(tab, (input: { selector: string; xpath: string; limit: number }) => {
       function allByXPath(expression: string) {
         const result = document.evaluate(expression, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
         return Array.from({ length: Math.min(result.snapshotLength, input.limit) }, (_, index) => result.snapshotItem(index) as Element).filter(Boolean);
       }
 
-      const matches = input.selector
-        ? Array.from(document.querySelectorAll(input.selector)).slice(0, input.limit)
-        : allByXPath(input.xpath);
+      let matches: Element[] = [];
+
+      try {
+        matches = input.selector
+          ? Array.from(document.querySelectorAll(input.selector)).slice(0, input.limit)
+          : allByXPath(input.xpath);
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : String(error),
+          elements: [],
+        };
+      }
 
       return matches.map((el, index) => {
         const rect = el.getBoundingClientRect();
@@ -168,7 +232,16 @@ export const vlmPageApi = {
       });
     }, [{ selector, xpath, limit }]);
 
-    return { selector: selector || undefined, xpath: xpath || undefined, count: elements.length, elements };
+    if ((elements as any)?.error) {
+      throw new Error(`QUERY_FAILED: ${(elements as any).error}`);
+    }
+
+    return {
+      selector: selector || undefined,
+      xpath: xpath || undefined,
+      count: Array.isArray(elements) ? elements.length : 0,
+      elements,
+    };
   },
 
   async screenshot(tabId: string, options: { selector?: string; highlight?: boolean }) {
@@ -199,7 +272,7 @@ export const vlmPageApi = {
     }
 
     try {
-      const image = await tab.view.webContents.capturePage();
+      const image = await tab.webContents.capturePage();
       const size = image.getSize();
       return { png: image.toPNG(), width: size.width, height: size.height };
     } finally {
@@ -221,8 +294,18 @@ export const vlmPageApi = {
       throw new Error('SELECTOR_REQUIRED');
     }
 
-    const elements = await runInPage(tab, (input: { selector: string; properties: string[] }) => {
-      return Array.from(document.querySelectorAll(input.selector)).slice(0, 100).map((el, index) => {
+    const elements: any = await runInPage(tab, (input: { selector: string; properties: string[] }) => {
+      let matches: Element[] = [];
+      try {
+        matches = Array.from(document.querySelectorAll(input.selector)).slice(0, 100);
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : String(error),
+          elements: [],
+        };
+      }
+
+      return matches.map((el, index) => {
         const computed = window.getComputedStyle(el);
         const styles: Record<string, string> = {};
         for (const property of input.properties) {
@@ -231,6 +314,10 @@ export const vlmPageApi = {
         return { index, styles };
       });
     }, [{ selector, properties }]);
+
+    if ((elements as any)?.error) {
+      throw new Error(`STYLE_FAILED: ${(elements as any).error}`);
+    }
 
     return { selector, elements };
   },
@@ -278,22 +365,37 @@ export const vlmPageApi = {
 
   async click(tabId: string, body: any) {
     const tab = getTabOrThrow(tabId);
-    const beforeUrl = tab.view.webContents.getURL();
-    const beforeDomHash = tab.domHash;
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
+
     const point = await resolvePoint(tab, body);
 
     tabManager.focusTab(tabId);
-    tab.view.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y });
-    tab.view.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-    tab.view.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+    tab.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y });
+    tab.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+    tab.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 });
 
-    const evidence = { beforeUrl, afterUrl: tab.view.webContents.getURL(), beforeDomHash, afterDomHash: tab.domHash, resolvedX: point.x, resolvedY: point.y };
-    logAction(tab, 'click', point, null, true, 'CLICK_SENT', evidence);
+    await sleep(250);
+
+    const evidence = await collectActionEvidence(tab, before, {
+      resolvedX: point.x,
+      resolvedY: point.y,
+      selector: point.selector,
+      xpath: point.xpath,
+    });
+
+    await logAction(tab, 'click', point, null, true, 'CLICK_SENT', evidence);
     return { ok: true, resolvedX: point.x, resolvedY: point.y };
   },
 
   async type(tabId: string, body: any) {
     const tab = getTabOrThrow(tabId);
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
     const text = typeof body?.text === 'string' ? body.text : '';
     const keys = Array.isArray(body?.keys) ? body.keys.filter((key: unknown) => typeof key === 'string') : [];
     if (!text && keys.length === 0) {
@@ -327,21 +429,42 @@ export const vlmPageApi = {
 
     tabManager.focusTab(tabId);
     for (const char of text) {
-      tab.view.webContents.sendInputEvent({ type: 'char', keyCode: char });
+      tab.webContents.sendInputEvent({ type: 'char', keyCode: char });
     }
 
     for (const key of keys) {
       const keyCode = keyForElectron(key);
-      tab.view.webContents.sendInputEvent({ type: 'keyDown', keyCode });
-      tab.view.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+      tab.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+      tab.webContents.sendInputEvent({ type: 'keyUp', keyCode });
     }
 
-    logAction(tab, 'type', { selector, xpath, keys }, body?.targetType === 'password' ? '[MASKED]' : text, true, 'TYPE_SENT', {});
+    await sleep(100);
+
+    const evidence = await collectActionEvidence(tab, before, {
+      selector,
+      xpath,
+      typedLength: text.length,
+      keys,
+    });
+
+    await logAction(
+      tab,
+      'type',
+      { selector, xpath, keys },
+      body?.targetType === 'password' ? '[MASKED]' : text,
+      true,
+      'TYPE_SENT',
+      evidence
+    );
     return { ok: true, typed: text.length, keys };
   },
 
   async scroll(tabId: string, body: any) {
     const tab = getTabOrThrow(tabId);
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
     const deltaX = Number(body?.deltaX) || 0;
     const deltaY = Number(body?.deltaY) || 0;
     const selector = typeof body?.selector === 'string' ? body.selector : undefined;
@@ -365,10 +488,21 @@ export const vlmPageApi = {
     } else {
       const x = Number.isFinite(body?.x) ? Math.round(body.x) : 0;
       const y = Number.isFinite(body?.y) ? Math.round(body.y) : 0;
-      tab.view.webContents.sendInputEvent({ type: 'mouseWheel', x, y, deltaX, deltaY });
+      tab.webContents.sendInputEvent({ type: 'mouseWheel', x, y, deltaX, deltaY });
     }
 
-    logAction(tab, 'scroll', { selector, xpath, x: body?.x, y: body?.y }, JSON.stringify({ deltaX, deltaY }), true, 'SCROLL_SENT', {});
+    await sleep(100);
+
+    const evidence = await collectActionEvidence(tab, before, {
+      selector,
+      xpath,
+      x: body?.x,
+      y: body?.y,
+      deltaX,
+      deltaY,
+    });
+
+    await logAction(tab, 'scroll', { selector, xpath, x: body?.x, y: body?.y }, JSON.stringify({ deltaX, deltaY }), true, 'SCROLL_SENT', evidence);
     return { ok: true, deltaX, deltaY };
   },
 
@@ -379,15 +513,22 @@ export const vlmPageApi = {
     }
 
     const tab = getTabOrThrow(tabId);
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
     await tabManager.navigateTab(tabId, url);
-    logAction(tab, 'navigate', { url }, url, true, 'NAVIGATION_LOADED', { afterUrl: tab.view.webContents.getURL() });
-    return { ok: true, url: tab.view.webContents.getURL() };
+    const evidence = await collectActionEvidence(tab, before, { requestedUrl: url });
+    await logAction(tab, 'navigate', { url }, url, true, 'NAVIGATION_LOADED', evidence);
+    return { ok: true, url: tab.webContents.getURL() };
   },
 
   async wait(tabId: string, body: any) {
     const tab = getTabOrThrow(tabId);
     const selector = typeof body?.selector === 'string' ? body.selector : '';
-    const until = typeof body?.until === 'string' ? body.until : 'present';
+    const allowedUntil = new Set(['present', 'absent', 'visible', 'hidden']);
+    const requestedUntil = typeof body?.until === 'string' ? body.until : 'present';
+    const until = allowedUntil.has(requestedUntil) ? requestedUntil : 'present';
     const timeoutMs = Math.max(100, Math.min(Number(body?.timeoutMs) || 5000, 60000));
     if (!selector) {
       throw new Error('SELECTOR_REQUIRED');
@@ -430,8 +571,13 @@ export const vlmPageApi = {
       throw new Error('SCRIPT_REQUIRED');
     }
 
-    const result = await tab.view.webContents.executeJavaScript(script, true);
-    logAction(tab, 'evaluate', null, script, true, 'EVALUATE_COMPLETED', {});
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
+    const result = await tab.webContents.executeJavaScript(script, true);
+    const evidence = await collectActionEvidence(tab, before, {});
+    await logAction(tab, 'evaluate', null, script, true, 'EVALUATE_COMPLETED', evidence);
     return { ok: true, result };
   },
 };

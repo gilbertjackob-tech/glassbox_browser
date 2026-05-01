@@ -256,7 +256,12 @@ export function startApiServer(port: number = 3000): Promise<void> {
 
     app.post('/api/tabs/:id/action/wait', async (req, res) => {
       try {
-        res.json(await vlmPageApi.wait(req.params.id, req.body || {}));
+        const result = await vlmPageApi.wait(req.params.id, req.body || {});
+        if (!result.ok && result.reason === 'timeout') {
+          res.status(408).json(result);
+          return;
+        }
+        res.json(result);
       } catch (error: any) {
         errorResponse(res, error);
       }
@@ -300,7 +305,12 @@ export function startApiServer(port: number = 3000): Promise<void> {
           return;
         }
         if (actionType === 'wait_for') {
-          res.json(await vlmPageApi.wait(tabId, req.body || {}));
+          const result = await vlmPageApi.wait(tabId, req.body || {});
+          if (!result.ok && result.reason === 'timeout') {
+            res.status(408).json(result);
+            return;
+          }
+          res.json(result);
           return;
         }
 
@@ -380,8 +390,11 @@ export function startApiServer(port: number = 3000): Promise<void> {
             ${successExpr},
             ${reasonExpr},
             ${timestampExpr},
-            NULL AS before_dom_hash,
-            NULL AS after_dom_hash
+            COALESCE(before_url, '') AS before_url,
+            COALESCE(after_url, '') AS after_url,
+            COALESCE(before_dom_hash, '') AS before_dom_hash,
+            COALESCE(after_dom_hash, '') AS after_dom_hash,
+            COALESCE(evidence_json, '{}') AS evidence_json
           FROM actions
           WHERE profile_id = ?
           ORDER BY ${actionsColumns.includes('created_at') ? 'created_at' : 'id'} DESC
