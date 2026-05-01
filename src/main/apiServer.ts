@@ -75,7 +75,8 @@ export function startApiServer(port: number = 3000): Promise<void> {
       try {
         const name = typeof req.body?.name === 'string' ? req.body.name : '';
         const id = typeof req.body?.id === 'string' ? req.body.id : undefined;
-        const profile = profileStore.create(name, id);
+        const email = typeof req.body?.email === 'string' ? req.body.email : undefined;
+        const profile = profileStore.create(name, id, email);
         res.json(profile);
       } catch (error: any) {
         errorResponse(res, error);
@@ -84,8 +85,10 @@ export function startApiServer(port: number = 3000): Promise<void> {
 
     app.patch('/api/profiles/:id', (req, res) => {
       try {
-        const name = typeof req.body?.name === 'string' ? req.body.name : '';
-        const profile = profileStore.rename(req.params.id, name);
+        const profile = profileStore.update(req.params.id, {
+          name: typeof req.body?.name === 'string' ? req.body.name : undefined,
+          email: typeof req.body?.email === 'string' ? req.body.email : undefined,
+        });
         res.json({ success: true, ...profile });
       } catch (error: any) {
         errorResponse(res, error);

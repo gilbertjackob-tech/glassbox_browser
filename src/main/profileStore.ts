@@ -3,6 +3,7 @@ import db from './memoryDb.js';
 export interface ProfileRecord {
   id: string;
   name: string;
+  email?: string | null;
   partition: string;
   created_at?: string;
 }
@@ -77,8 +78,9 @@ class ProfileStore {
     return profile;
   }
 
-  create(name: string, requestedId?: string) {
+  create(name: string, requestedId?: string, email?: string) {
     const cleanName = name.trim();
+    const cleanEmail = typeof email === 'string' ? email.trim() : '';
     if (!cleanName) {
       throw new Error('PROFILE_NAME_REQUIRED');
     }
@@ -92,23 +94,32 @@ class ProfileStore {
     }
 
     const partition = profilePartition(id);
-    db.prepare('INSERT INTO profiles (id, name, partition) VALUES (?, ?, ?)')
-      .run(id, cleanName, partition);
+    db.prepare('INSERT INTO profiles (id, name, email, partition) VALUES (?, ?, ?, ?)')
+      .run(id, cleanName, cleanEmail || null, partition);
 
     return this.get(id) as ProfileRecord;
   }
 
-  rename(idOrName: string, name: string) {
+  update(idOrName: string, payload: { name?: string; email?: string }) {
     const profile = this.get(idOrName);
-    const cleanName = name.trim();
     if (!profile) {
       throw new Error('PROFILE_NOT_FOUND');
     }
+
+    const hasName = typeof payload.name === 'string';
+    const hasEmail = typeof payload.email === 'string';
+    if (!hasName && !hasEmail) {
+      throw new Error('PROFILE_UPDATE_REQUIRED');
+    }
+
+    const cleanName = hasName ? payload.name!.trim() : profile.name;
+    const cleanEmail = hasEmail ? payload.email!.trim() : (profile.email || '');
+
     if (!cleanName) {
       throw new Error('PROFILE_NAME_REQUIRED');
     }
 
-    db.prepare('UPDATE profiles SET name = ? WHERE id = ?').run(cleanName, profile.id);
+    db.prepare('UPDATE profiles SET name = ?, email = ? WHERE id = ?').run(cleanName, cleanEmail || null, profile.id);
     return this.get(profile.id) as ProfileRecord;
   }
 

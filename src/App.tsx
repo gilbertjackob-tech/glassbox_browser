@@ -32,6 +32,7 @@ interface Tab {
 interface Profile {
   id: string;
   name: string;
+  email?: string | null;
 }
 
 interface DomElement {
@@ -140,6 +141,12 @@ export default function App() {
   const [profileCreatorOpenLogin, setProfileCreatorOpenLogin] = useState(true);
   const [profileCreatorError, setProfileCreatorError] = useState<string | null>(null);
   const [profileCreatorBusy, setProfileCreatorBusy] = useState(false);
+  const [profileCreatorEmail, setProfileCreatorEmail] = useState('');
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [editingProfileName, setEditingProfileName] = useState('');
+  const [editingProfileEmail, setEditingProfileEmail] = useState('');
+  const [editingProfileBusy, setEditingProfileBusy] = useState(false);
+  const [editingProfileError, setEditingProfileError] = useState<string | null>(null);
   const [passwordForm, setPasswordForm] = useState({ origin: '', username: '', password: '' });
   const browserViewRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
@@ -292,6 +299,7 @@ export default function App() {
 
   const openProfileCreator = () => {
     setProfileCreatorName('');
+    setProfileCreatorEmail('');
     setProfileCreatorStartUrl('https://accounts.google.com/');
     setProfileCreatorOpenLogin(true);
     setProfileCreatorError(null);
@@ -313,7 +321,7 @@ export default function App() {
       const createRes = await fetch('/api/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, email: profileCreatorEmail.trim() || undefined }),
       });
 
       const newProfile = await createRes.json();
@@ -361,18 +369,51 @@ export default function App() {
     }
   };
 
-  const renameProfile = async (profileId: string) => {
-    const currentProfile = profiles.find((profile) => profile.id === profileId);
-    const nextName = (prompt('Rename profile:', currentProfile?.name || '') ?? '').trim();
-    if (!nextName) return;
+  const startProfileEdit = (profile: Profile) => {
+    setEditingProfileId(profile.id);
+    setEditingProfileName(profile.name || '');
+    setEditingProfileEmail(profile.email || '');
+    setEditingProfileError(null);
+  };
 
-    await fetch(`/api/profiles/${profileId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: nextName }),
-    });
+  const cancelProfileEdit = () => {
+    setEditingProfileId(null);
+    setEditingProfileName('');
+    setEditingProfileEmail('');
+    setEditingProfileError(null);
+  };
 
-    await fetchProfiles();
+  const saveProfileEdit = async (profileId: string) => {
+    const nextName = editingProfileName.trim();
+    const nextEmail = editingProfileEmail.trim();
+
+    if (!nextName) {
+      setEditingProfileError('Profile name is required.');
+      return;
+    }
+
+    setEditingProfileBusy(true);
+    setEditingProfileError(null);
+
+    try {
+      const res = await fetch(`/api/profiles/${encodeURIComponent(profileId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nextName, email: nextEmail }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to update profile.');
+      }
+
+      await fetchProfiles();
+      cancelProfileEdit();
+    } catch (error: any) {
+      setEditingProfileError(error?.message || 'Could not save profile.');
+    } finally {
+      setEditingProfileBusy(false);
+    }
   };
 
   const deleteProfile = async (profileId: string) => {
@@ -990,8 +1031,30 @@ export default function App() {
                     {profiles.map((profile) => (
                       <div key={profile.id} className="flex items-center gap-2 rounded border border-gb-border bg-gb-surface p-2">
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[11px] font-semibold text-gb-text">{profile.name}</div>
-                          <div className="truncate text-[10px] text-gb-text-dim">{profile.id === 'default' ? 'Default local profile' : profile.id}</div>
+                          {editingProfileId === profile.id ? (
+                            <div className="space-y-1">
+                              <input
+                                type="text"
+                                value={editingProfileName}
+                                onChange={(e) => setEditingProfileName(e.target.value)}
+                                placeholder="Profile name"
+                                className="w-full rounded border border-gb-border bg-gb-bg px-2 py-1 text-[11px] text-gb-text outline-none focus:border-gb-accent-primary"
+                              />
+                              <input
+                                type="email"
+                                value={editingProfileEmail}
+                                onChange={(e) => setEditingProfileEmail(e.target.value)}
+                                placeholder="Email caption"
+                                className="w-full rounded border border-gb-border bg-gb-bg px-2 py-1 text-[10px] text-gb-text outline-none focus:border-gb-accent-primary"
+                              />
+                              {editingProfileError && <div className="text-[10px] text-red-400">{editingProfileError}</div>}
+                            </div>
+                          ) : (
+                            <>
+                              <div className="truncate text-[11px] font-semibold text-gb-text">{profile.name}</div>
+                              <div className="truncate text-[10px] text-gb-text-dim">{(profile.email || '').trim() || (profile.id === 'default' ? 'Default local profile' : profile.id)}</div>
+                            </>
+                          )}
                         </div>
                         <button
                           type="button"
@@ -1002,13 +1065,33 @@ export default function App() {
                         >
                           {profile.id === activeProfileId ? 'Active' : 'Use'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => renameProfile(profile.id)}
-                          className="rounded bg-gb-surface-bright px-2 py-1 text-[10px] font-semibold text-gb-text"
-                        >
-                          Rename
-                        </button>
+                        {editingProfileId === profile.id ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => saveProfileEdit(profile.id)}
+                              disabled={editingProfileBusy}
+                              className="rounded bg-gb-accent-primary px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-60"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelProfileEdit}
+                              className="rounded bg-gb-surface-bright px-2 py-1 text-[10px] font-semibold text-gb-text"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startProfileEdit(profile)}
+                            className="rounded bg-gb-surface-bright px-2 py-1 text-[10px] font-semibold text-gb-text"
+                          >
+                            Rename
+                          </button>
+                        )}
                         {profile.id !== 'default' && (
                           <button
                             type="button"
@@ -1205,6 +1288,16 @@ export default function App() {
                 }
               }}
               placeholder="Work, Personal, Fiverr, Research..."
+              className="mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
+            />
+            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-gb-text-dim">
+              Email caption
+            </label>
+            <input
+              type="email"
+              value={profileCreatorEmail}
+              onChange={(e) => setProfileCreatorEmail(e.target.value)}
+              placeholder="you@example.com"
               className="mt-2 w-full rounded-md border border-gb-border bg-gb-bg px-3 py-2 text-sm text-gb-text outline-none transition-colors focus:border-gb-accent-primary"
             />
 
