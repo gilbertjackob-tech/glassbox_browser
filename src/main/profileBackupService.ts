@@ -394,6 +394,10 @@ export async function importFullProfileBackup(backup: any, password: string) {
       if (!profile.id || !profile.name) continue;
 
       const partition = profile.partition || `persist:gb-profile-${profile.id}`;
+      const importedEmail = typeof profile.email === 'string' ? profile.email.trim() : '';
+      const emailToStore = profile.id === 'default'
+        ? importedEmail || null
+        : importedEmail || `missing-email+${profile.id}@glassbox.local`;
 
       db.prepare(`
         INSERT INTO profiles (id, name, email, partition, created_at)
@@ -405,7 +409,7 @@ export async function importFullProfileBackup(backup: any, password: string) {
       `).run(
         profile.id,
         profile.name,
-        typeof profile.email === 'string' ? profile.email : null,
+        emailToStore,
         partition,
         profile.created_at || null
       );

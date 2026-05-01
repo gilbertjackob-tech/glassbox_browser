@@ -6620,7 +6620,8 @@ import_electron.contextBridge.exposeInMainWorld("windowControls", {
   minimize: () => import_electron.ipcRenderer.invoke("gb:window-minimize"),
   toggleMaximize: () => import_electron.ipcRenderer.invoke("gb:window-toggle-maximize"),
   close: () => import_electron.ipcRenderer.invoke("gb:window-close"),
-  closeTab: (tabId) => import_electron.ipcRenderer.invoke("gb:window-close-tab", { tabId })
+  closeTab: (tabId) => import_electron.ipcRenderer.invoke("gb:window-close-tab", { tabId }),
+  focusShell: () => import_electron.ipcRenderer.invoke("gb:focus-shell")
 });
 var lastHash = "";
 var scanTimeout = null;

@@ -100,26 +100,39 @@ class ProfileStore {
     return this.get(id) as ProfileRecord;
   }
 
-  update(idOrName: string, payload: { name?: string; email?: string }) {
+  update(idOrName: string, payload: { name?: string }) {
     const profile = this.get(idOrName);
     if (!profile) {
       throw new Error('PROFILE_NOT_FOUND');
     }
 
     const hasName = typeof payload.name === 'string';
-    const hasEmail = typeof payload.email === 'string';
-    if (!hasName && !hasEmail) {
+    if (!hasName) {
       throw new Error('PROFILE_UPDATE_REQUIRED');
     }
 
-    const cleanName = hasName ? payload.name!.trim() : profile.name;
-    const cleanEmail = hasEmail ? payload.email!.trim() : (profile.email || '');
+    const cleanName = payload.name!.trim();
 
     if (!cleanName) {
       throw new Error('PROFILE_NAME_REQUIRED');
     }
 
-    db.prepare('UPDATE profiles SET name = ?, email = ? WHERE id = ?').run(cleanName, cleanEmail || null, profile.id);
+    db.prepare('UPDATE profiles SET name = ? WHERE id = ?').run(cleanName, profile.id);
+    return this.get(profile.id) as ProfileRecord;
+  }
+
+  setEmail(idOrName: string, email: string) {
+    const profile = this.get(idOrName);
+    if (!profile) {
+      throw new Error('PROFILE_NOT_FOUND');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      throw new Error('EMAIL_REQUIRED_FOR_PROFILE');
+    }
+
+    db.prepare('UPDATE profiles SET email = ? WHERE id = ?').run(cleanEmail, profile.id);
     return this.get(profile.id) as ProfileRecord;
   }
 

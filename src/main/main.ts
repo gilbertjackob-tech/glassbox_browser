@@ -155,6 +155,16 @@ ipcMain.handle('gb:window-close-tab', async (_event, { tabId }) => {
   return { success: true, nextActiveTabId: result.nextActiveTabId };
 });
 
+ipcMain.handle('gb:focus-shell', () => {
+  if (!mainWindow) {
+    return { success: false };
+  }
+
+  mainWindow.focus();
+  mainWindow.webContents.focus();
+  return { success: true };
+});
+
 ipcMain.on('gb:heartbeat', (event, data) => {
   tabManager.handleHeartbeat(event.sender, data || {});
 });

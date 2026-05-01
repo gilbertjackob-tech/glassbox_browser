@@ -79,6 +79,21 @@ Warning:
 - Some websites may still force re-login due to device, IP, 2FA, or risk checks.
 - This is not Chrome Sync. It restores GlassBox/Electron profile sessions.
 
+## Profile Identity Rule
+GlassBox has one local fallback profile:
+
+- `Default` can be used without an email.
+
+For non-default profiles:
+
+- A profile can be created without email.
+- After logging into Google/Gmail in that profile, use `Detect email` to attach account identity.
+- The profile name can be renamed.
+- The email is used as the profile identity caption and is not editable from Rename.
+- If you do not want to attach an email, use the Default profile.
+
+This email is metadata for organizing isolated profiles. It does not automatically prove login or sync Chrome/Google account data.
+
 ## 📖 How it works
 1. **Open a Tab**: Launch an isolated BrowserView session.
 2. **Navigate**: Native Electron browsing with deep instrumentation.

@@ -54,7 +54,8 @@ contextBridge.exposeInMainWorld('windowControls', {
   minimize: () => ipcRenderer.invoke('gb:window-minimize'),
   toggleMaximize: () => ipcRenderer.invoke('gb:window-toggle-maximize'),
   close: () => ipcRenderer.invoke('gb:window-close'),
-  closeTab: (tabId: string) => ipcRenderer.invoke('gb:window-close-tab', { tabId })
+  closeTab: (tabId: string) => ipcRenderer.invoke('gb:window-close-tab', { tabId }),
+  focusShell: () => ipcRenderer.invoke('gb:focus-shell')
 });
 
 // Periodic Heartbeat to Main Process
@@ -109,4 +110,3 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 
 // Fallback Heartbeat
 setInterval(triggerScan, 2000);
-
