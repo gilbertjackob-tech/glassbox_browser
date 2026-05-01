@@ -1,8 +1,48 @@
+# Dependencies / builds
 node_modules/
 build/
 dist/
 coverage/
 .DS_Store
 *.log
+
+# Environment / secrets
 .env*
 !.env.example
+
+# Local app database / runtime state
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# GlassBox backups may contain encrypted cookies/session tokens
+*.gbprofile
+
+# Electron/Chromium runtime profile data
+userData/
+Partitions/
+Default/
+Cookies
+Cookies-journal
+Local Storage/
+Session Storage/
+IndexedDB/
+Service Worker/
+Network/
+Cache/
+Code Cache/
+GPUCache/
+DawnCache/
+GrShaderCache/
+
+# Local screenshots / debug captures
+screenshots/
+captures/
+recordings/
+debug/
+tmp/
+temp/
