@@ -5,6 +5,8 @@ dist/
 coverage/
 .DS_Store
 *.log
+# Build outputs
+dist-electron/
 
 # Environment / secrets
 .env*
