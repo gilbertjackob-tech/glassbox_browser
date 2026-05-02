@@ -165,3 +165,64 @@ export function parseSkillSteps(skill: any) {
 
   return sanitizeSkillSteps(steps);
 }
+
+export function renderSkillSteps(steps: any[], inputs: Record<string, unknown> = {}) {
+  const cleanSteps = sanitizeSkillSteps(steps);
+
+  function renderValue(value: unknown): unknown {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    return value.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, key) => {
+      const replacement = inputs[key];
+      if (replacement === undefined || replacement === null) {
+        return '';
+      }
+      return String(replacement);
+    });
+  }
+
+  function renderObject(value: any): any {
+    if (Array.isArray(value)) {
+      return value.map(renderObject);
+    }
+
+    if (value && typeof value === 'object') {
+      const output: Record<string, unknown> = {};
+      for (const [key, nestedValue] of Object.entries(value)) {
+        output[key] = renderObject(nestedValue);
+      }
+      return output;
+    }
+
+    return renderValue(value);
+  }
+
+  return cleanSteps.map((step) => renderObject(step));
+}
+
+export function markMicroSkillResult(skillId: string, ok: boolean) {
+  const skill = db.prepare('SELECT * FROM skills WHERE id = ?').get(skillId) as any;
+  if (!skill) {
+    return null;
+  }
+
+  const successCount = Number(skill.success_count || 0);
+  const failureCount = Number(skill.failure_count || 0);
+
+  db.prepare(`
+    UPDATE skills
+    SET
+      success_count = ?,
+      failure_count = ?,
+      last_used = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    ok ? successCount + 1 : successCount,
+    ok ? failureCount : failureCount + 1,
+    skillId
+  );
+
+  return db.prepare('SELECT * FROM skills WHERE id = ?').get(skillId);
+}

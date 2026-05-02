@@ -11,7 +11,13 @@ import {
   rememberSuccessfulTarget,
   targetMatchesKey,
 } from './targetMemoryService.js';
-import { saveMicroSkill } from './skillService.js';
+import {
+  getMicroSkill,
+  markMicroSkillResult,
+  parseSkillSteps,
+  renderSkillSteps,
+  saveMicroSkill,
+} from './skillService.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -1602,6 +1608,54 @@ export const vlmPageApi = {
       results,
       savedSkill,
       elapsedMs: Date.now() - chainStartedAt,
+    };
+  },
+
+  async runMicroSkill(tabId: string, body: any) {
+    const tab = getTabOrThrow(tabId);
+
+    const skillNameOrId =
+      typeof body?.skill === 'string'
+        ? body.skill
+        : typeof body?.skillId === 'string'
+          ? body.skillId
+          : typeof body?.name === 'string'
+            ? body.name
+            : '';
+
+    if (!skillNameOrId) {
+      throw new Error('SKILL_REQUIRED');
+    }
+
+    const skill = getMicroSkill(tab.profileId, skillNameOrId);
+    if (!skill) {
+      throw new Error('SKILL_NOT_FOUND');
+    }
+
+    const rawSteps = parseSkillSteps(skill);
+    const inputs = body?.inputs && typeof body.inputs === 'object' ? body.inputs : {};
+    const renderedSteps = renderSkillSteps(rawSteps, inputs);
+
+    const chainResult = await this.runActionChain(tabId, {
+      steps: renderedSteps,
+      stopOnFailure: body?.stopOnFailure !== false,
+      maxSteps: Math.max(1, Math.min(Number(body?.maxSteps) || 10, 10)),
+    });
+
+    const updatedSkill = markMicroSkillResult(skill.id, Boolean(chainResult.ok));
+
+    return {
+      ok: Boolean(chainResult.ok),
+      tabId,
+      skill: {
+        id: skill.id,
+        name: skill.name,
+        query_pattern: skill.query_pattern,
+      },
+      inputs,
+      renderedStepCount: renderedSteps.length,
+      chainResult,
+      updatedSkill,
     };
   },
 

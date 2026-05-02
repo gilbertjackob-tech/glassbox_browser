@@ -493,6 +493,14 @@ export function startApiServer(port: number = 3000): Promise<void> {
       }
     });
 
+    app.post('/api/tabs/:id/skills/run', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.runMicroSkill(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
     app.post('/api/tabs/:id/memory/resolve-target', async (req, res) => {
       try {
         const tab = tabManager.getTab(req.params.id);
