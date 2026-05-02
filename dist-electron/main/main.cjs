@@ -25413,6 +25413,9 @@ var import_path2 = require("path");
 var import_module = require("module");
 var require2 = (0, import_module.createRequire)(typeof __filename === "string" ? __filename : `${process.cwd()}\\src\\server\\tabManager.ts`);
 var DEFAULT_LANDING_URL = "https://bing.com";
+var MIN_ZOOM_FACTOR = 0.5;
+var MAX_ZOOM_FACTOR = 3;
+var ZOOM_STEP = 0.1;
 var app;
 var BrowserView;
 var session;
@@ -25463,12 +25466,50 @@ var TabManager = class {
     this.activeTabId = null;
     this.window = null;
     this.lastBounds = { x: 0, y: 80, width: 1280, height: 720 };
+    this.zoomFactor = 1;
   }
   setWindow(window2) {
     this.window = window2;
+    this.applyZoomFactorToWindow();
   }
   getActiveTabId() {
     return this.activeTabId;
+  }
+  getZoomFactor() {
+    return this.zoomFactor;
+  }
+  clampZoomFactor(nextZoomFactor) {
+    return Math.min(MAX_ZOOM_FACTOR, Math.max(MIN_ZOOM_FACTOR, Number(nextZoomFactor.toFixed(2))));
+  }
+  applyZoomFactorToWindow() {
+    if (!this.window?.webContents || typeof this.window.webContents.setZoomFactor !== "function") {
+      return;
+    }
+    this.window.webContents.setZoomFactor(this.zoomFactor);
+  }
+  applyZoomFactorToTab(tab) {
+    if (!tab?.webContents || typeof tab.webContents.setZoomFactor !== "function") {
+      return;
+    }
+    tab.webContents.setZoomFactor(this.zoomFactor);
+  }
+  applyZoomFactorToAllTabs() {
+    for (const tab of this.tabs.values()) {
+      this.applyZoomFactorToTab(tab);
+    }
+  }
+  setZoomFactor(nextZoomFactor) {
+    this.zoomFactor = this.clampZoomFactor(nextZoomFactor);
+    this.applyZoomFactorToWindow();
+    this.applyZoomFactorToAllTabs();
+    return this.zoomFactor;
+  }
+  adjustZoom(direction) {
+    const delta = direction === "in" ? ZOOM_STEP : -ZOOM_STEP;
+    return this.setZoomFactor(this.zoomFactor + delta);
+  }
+  resetZoom() {
+    return this.setZoomFactor(1);
   }
   getDefaultViewBounds() {
     if (!this.window) {
@@ -25514,6 +25555,7 @@ var TabManager = class {
       VALUES (?, ?, ?, ?)
     `).run(id, profile.id, tab.url, tab.title);
     this.tabs.set(id, tab);
+    this.applyZoomFactorToTab(tab);
     tab.webContents.on("did-start-loading", () => console.log("Loading started"));
     tab.webContents.on("did-finish-load", () => console.log("Page loaded:", tab.webContents.getURL()));
     tab.webContents.on("page-title-updated", (_e, title) => {
@@ -25538,6 +25580,50 @@ var TabManager = class {
   }
   getTab(id) {
     return this.tabs.get(id);
+  }
+  async goBack(id) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error("TAB_NOT_FOUND");
+    }
+    if (typeof tab.webContents.canGoBack === "function" && !tab.webContents.canGoBack()) {
+      return { success: false, reason: "NO_HISTORY_BACK" };
+    }
+    tab.webContents.goBack();
+    return { success: true };
+  }
+  async goForward(id) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error("TAB_NOT_FOUND");
+    }
+    if (typeof tab.webContents.canGoForward === "function" && !tab.webContents.canGoForward()) {
+      return { success: false, reason: "NO_HISTORY_FORWARD" };
+    }
+    tab.webContents.goForward();
+    return { success: true };
+  }
+  async reload(id, hard = false) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error("TAB_NOT_FOUND");
+    }
+    if (hard && typeof tab.webContents.reloadIgnoringCache === "function") {
+      tab.webContents.reloadIgnoringCache();
+    } else {
+      tab.webContents.reload();
+    }
+    return { success: true };
+  }
+  async stop(id) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error("TAB_NOT_FOUND");
+    }
+    if (typeof tab.webContents.stop === "function") {
+      tab.webContents.stop();
+    }
+    return { success: true };
   }
   syncHistory(profileId, url, title) {
     if (url === "about:blank" || !url.startsWith("http")) return;
@@ -27473,6 +27559,46 @@ import_electron2.ipcMain.handle("gb:navigate", async (_event, { tabId, url }) =>
     return { success: false, reason: error.message || "NAVIGATION_FAILED" };
   }
 });
+import_electron2.ipcMain.handle("gb:tab-back", async (_event, { tabId }) => {
+  if (!tabId) {
+    return { success: false, reason: "INVALID_INPUT" };
+  }
+  try {
+    return await tabManager.goBack(tabId);
+  } catch (error) {
+    return { success: false, reason: error.message || "BACK_FAILED" };
+  }
+});
+import_electron2.ipcMain.handle("gb:tab-forward", async (_event, { tabId }) => {
+  if (!tabId) {
+    return { success: false, reason: "INVALID_INPUT" };
+  }
+  try {
+    return await tabManager.goForward(tabId);
+  } catch (error) {
+    return { success: false, reason: error.message || "FORWARD_FAILED" };
+  }
+});
+import_electron2.ipcMain.handle("gb:tab-reload", async (_event, { tabId, hard }) => {
+  if (!tabId) {
+    return { success: false, reason: "INVALID_INPUT" };
+  }
+  try {
+    return await tabManager.reload(tabId, Boolean(hard));
+  } catch (error) {
+    return { success: false, reason: error.message || "RELOAD_FAILED" };
+  }
+});
+import_electron2.ipcMain.handle("gb:tab-stop", async (_event, { tabId }) => {
+  if (!tabId) {
+    return { success: false, reason: "INVALID_INPUT" };
+  }
+  try {
+    return await tabManager.stop(tabId);
+  } catch (error) {
+    return { success: false, reason: error.message || "STOP_FAILED" };
+  }
+});
 import_electron2.ipcMain.handle("gb:window-minimize", () => {
   mainWindow?.minimize();
   return { success: true };
@@ -27507,8 +27633,25 @@ import_electron2.ipcMain.handle("gb:focus-shell", () => {
   mainWindow.webContents.focus();
   return { success: true };
 });
+import_electron2.ipcMain.handle("gb:zoom-adjust", (_event, { direction }) => {
+  if (direction !== "in" && direction !== "out") {
+    return { success: false, reason: "INVALID_DIRECTION" };
+  }
+  const zoomFactor = tabManager.adjustZoom(direction);
+  return { success: true, zoomFactor };
+});
+import_electron2.ipcMain.handle("gb:zoom-reset", () => {
+  const zoomFactor = tabManager.resetZoom();
+  return { success: true, zoomFactor };
+});
+import_electron2.ipcMain.handle("gb:zoom-get", () => {
+  return { success: true, zoomFactor: tabManager.getZoomFactor() };
+});
 import_electron2.ipcMain.on("gb:heartbeat", (event, data) => {
   tabManager.handleHeartbeat(event.sender, data || {});
+});
+import_electron2.ipcMain.on("gb:shortcut-triggered", (_event, payload) => {
+  mainWindow?.webContents.send("gb:shortcut-triggered", payload);
 });
 import_electron2.app.whenReady().then(async () => {
   const startupArgs = parseStartupArgs(process.argv.slice(1));

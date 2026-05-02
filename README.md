@@ -7,6 +7,7 @@ An automation-native browser shell where the agent is the user. GlassBox provide
 - **GlassBox DOM**: Every element is inspected for role, text, and bounding box.
 - **Action Contracts**: "No success without evidence". Every action (click/type) is verified and logged to a SQLite memory database.
 - **Profile Partitioning**: SQLite-driven profiles with isolated sessions.
+- **Shortcut Registry**: Keyboard shortcuts are grouped by Navigation, Tabs, Profiles, Settings, Utility Panels, Automation, Safety, and Command, with a CLI-equivalent string for each command.
 - **Technical UI**: A high-density "Mission Control" interface for monitoring automation.
 
 ## 📁 Architecture
@@ -15,6 +16,7 @@ An automation-native browser shell where the agent is the user. GlassBox provide
 - `src/server/tabManager.ts`: Lifecycle management for visible Electron BrowserView tabs.
 - `src/server/vlmPageApi.ts`: Glass-box perception and VLM action API.
 - `src/main/memoryDb.ts`: Core SQLite persistence for GlassBox memory.
+- `src/lib/shortcuts.ts`: Default shortcut registry, parser, formatter, and conflict detection helpers.
 - `src/App.tsx`: React-based control shell.
 
 ## 💾 Local Memory (SQLite)
@@ -58,6 +60,40 @@ npm run gb -- type --tab <tabId> --sel "input[name='email']" --text "user@exampl
 
 Profiles are local-only and isolated by Electron persistent session partition. Existing old partition data is not auto-migrated.
 GlassBox profiles are Electron profiles, not real Chrome profiles. Login cookies and session data persist per GlassBox profile, but Chrome browser sync/import is not implemented.
+
+## Keyboard Shortcuts
+GlassBox includes a registry-backed keyboard shortcut system with command IDs and CLI-equivalent strings for future routing parity.
+
+- Open `Settings -> Keyboard Shortcuts` to search, filter, edit, reset individual shortcuts, or reset all shortcuts.
+- Shortcuts are stored locally first in `localStorage` under `gb-shortcuts`.
+- Conflicts are detected before replacing an existing shortcut.
+
+Default shortcut groups:
+- Navigation: `Ctrl+L`, `Ctrl+K`, `Alt+Left`, `Alt+Right`, `Ctrl+R`, `Ctrl+Shift+R`, `Esc`
+- Tabs: `Ctrl+T`, `Ctrl+W`, `Ctrl+Shift+T`, `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Alt+1..9`
+- Profiles: `Ctrl+Shift+P`, `Ctrl+Alt+P`, `Ctrl+Alt+E`, `Ctrl+Alt+B`, `Ctrl+Alt+N`, `Ctrl+Alt+0`
+- Settings: `Ctrl+,`, `Ctrl+Alt+1..8`
+- Utility Panels: `Ctrl+Shift+M`, `Ctrl+Shift+H`, `Ctrl+Shift+J`, `Ctrl+Shift+O`, `Ctrl+Shift+A`, `Ctrl+Shift+U`
+- Automation: `Ctrl+Alt+D`, `Ctrl+Alt+H`, `Ctrl+Alt+S`, `Ctrl+Alt+A`, `Ctrl+Alt+Q`, `Ctrl+Alt+X`, `Ctrl+Alt+C`, `Ctrl+Alt+V`, `Ctrl+Alt+R`, `Ctrl+Alt+L`
+- Safety: `Ctrl+Alt+Esc`, `Ctrl+Alt+Space`, `Ctrl+Alt+Backspace`, `Ctrl+Alt+Z`
+- Command palette: `Ctrl+Shift+K`
+
+## Command Palette
+Press `Ctrl+Shift+K` to open the command palette. It lets you search and run registered commands such as:
+
+- `new tab`
+- `detect profile email`
+- `capture dom`
+- `backup profile`
+- `open settings`
+
+## Browser Zoom
+GlassBox applies zoom to the whole visible browsing surface, including Electron `BrowserView` tabs.
+
+- `Shift + +`: zoom in
+- `Shift + -`: zoom out
+- `Ctrl + mouse wheel`: zoom in or out
+- `Ctrl/Cmd + 0`: reset zoom
 
 ## Full Profile Backup
 GlassBox supports encrypted full profile backups using `.gbprofile` files.

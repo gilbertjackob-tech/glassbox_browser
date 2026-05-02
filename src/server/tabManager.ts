@@ -6,6 +6,9 @@ import { createRequire } from 'module';
 
 const require = createRequire(typeof __filename === 'string' ? __filename : `${process.cwd()}\\src\\server\\tabManager.ts`);
 const DEFAULT_LANDING_URL = 'https://bing.com';
+const MIN_ZOOM_FACTOR = 0.5;
+const MAX_ZOOM_FACTOR = 3;
+const ZOOM_STEP = 0.1;
 
 // Defensive Electron import for Node/Vite preview
 let app: any, BrowserView: any, session: any;
@@ -56,13 +59,61 @@ class TabManager {
   private activeTabId: string | null = null;
   private window: any | null = null;
   private lastBounds = { x: 0, y: 80, width: 1280, height: 720 };
+  private zoomFactor = 1;
 
   setWindow(window: any) {
     this.window = window;
+    this.applyZoomFactorToWindow();
   }
 
   getActiveTabId() {
     return this.activeTabId;
+  }
+
+  getZoomFactor() {
+    return this.zoomFactor;
+  }
+
+  private clampZoomFactor(nextZoomFactor: number) {
+    return Math.min(MAX_ZOOM_FACTOR, Math.max(MIN_ZOOM_FACTOR, Number(nextZoomFactor.toFixed(2))));
+  }
+
+  private applyZoomFactorToWindow() {
+    if (!this.window?.webContents || typeof this.window.webContents.setZoomFactor !== 'function') {
+      return;
+    }
+
+    this.window.webContents.setZoomFactor(this.zoomFactor);
+  }
+
+  private applyZoomFactorToTab(tab: TabMetadata) {
+    if (!tab?.webContents || typeof tab.webContents.setZoomFactor !== 'function') {
+      return;
+    }
+
+    tab.webContents.setZoomFactor(this.zoomFactor);
+  }
+
+  private applyZoomFactorToAllTabs() {
+    for (const tab of this.tabs.values()) {
+      this.applyZoomFactorToTab(tab);
+    }
+  }
+
+  setZoomFactor(nextZoomFactor: number) {
+    this.zoomFactor = this.clampZoomFactor(nextZoomFactor);
+    this.applyZoomFactorToWindow();
+    this.applyZoomFactorToAllTabs();
+    return this.zoomFactor;
+  }
+
+  adjustZoom(direction: 'in' | 'out') {
+    const delta = direction === 'in' ? ZOOM_STEP : -ZOOM_STEP;
+    return this.setZoomFactor(this.zoomFactor + delta);
+  }
+
+  resetZoom() {
+    return this.setZoomFactor(1);
   }
 
   private getDefaultViewBounds() {
@@ -121,6 +172,7 @@ class TabManager {
     `).run(id, profile.id, tab.url, tab.title);
 
     this.tabs.set(id, tab);
+    this.applyZoomFactorToTab(tab);
 
     tab.webContents.on('did-start-loading', () => console.log('Loading started'));
     tab.webContents.on('did-finish-load', () => console.log('Page loaded:', tab.webContents.getURL()));
@@ -153,6 +205,62 @@ class TabManager {
 
   getTab(id: string) {
     return this.tabs.get(id);
+  }
+
+  async goBack(id: string) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error('TAB_NOT_FOUND');
+    }
+
+    if (typeof tab.webContents.canGoBack === 'function' && !tab.webContents.canGoBack()) {
+      return { success: false, reason: 'NO_HISTORY_BACK' };
+    }
+
+    tab.webContents.goBack();
+    return { success: true };
+  }
+
+  async goForward(id: string) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error('TAB_NOT_FOUND');
+    }
+
+    if (typeof tab.webContents.canGoForward === 'function' && !tab.webContents.canGoForward()) {
+      return { success: false, reason: 'NO_HISTORY_FORWARD' };
+    }
+
+    tab.webContents.goForward();
+    return { success: true };
+  }
+
+  async reload(id: string, hard = false) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error('TAB_NOT_FOUND');
+    }
+
+    if (hard && typeof tab.webContents.reloadIgnoringCache === 'function') {
+      tab.webContents.reloadIgnoringCache();
+    } else {
+      tab.webContents.reload();
+    }
+
+    return { success: true };
+  }
+
+  async stop(id: string) {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      throw new Error('TAB_NOT_FOUND');
+    }
+
+    if (typeof tab.webContents.stop === 'function') {
+      tab.webContents.stop();
+    }
+
+    return { success: true };
   }
 
   private syncHistory(profileId: string, url: string, title: string) {

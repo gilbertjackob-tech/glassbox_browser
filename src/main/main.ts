@@ -122,6 +122,54 @@ ipcMain.handle('gb:navigate', async (_event, { tabId, url }) => {
   }
 });
 
+ipcMain.handle('gb:tab-back', async (_event, { tabId }) => {
+  if (!tabId) {
+    return { success: false, reason: 'INVALID_INPUT' };
+  }
+
+  try {
+    return await tabManager.goBack(tabId);
+  } catch (error: any) {
+    return { success: false, reason: error.message || 'BACK_FAILED' };
+  }
+});
+
+ipcMain.handle('gb:tab-forward', async (_event, { tabId }) => {
+  if (!tabId) {
+    return { success: false, reason: 'INVALID_INPUT' };
+  }
+
+  try {
+    return await tabManager.goForward(tabId);
+  } catch (error: any) {
+    return { success: false, reason: error.message || 'FORWARD_FAILED' };
+  }
+});
+
+ipcMain.handle('gb:tab-reload', async (_event, { tabId, hard }) => {
+  if (!tabId) {
+    return { success: false, reason: 'INVALID_INPUT' };
+  }
+
+  try {
+    return await tabManager.reload(tabId, Boolean(hard));
+  } catch (error: any) {
+    return { success: false, reason: error.message || 'RELOAD_FAILED' };
+  }
+});
+
+ipcMain.handle('gb:tab-stop', async (_event, { tabId }) => {
+  if (!tabId) {
+    return { success: false, reason: 'INVALID_INPUT' };
+  }
+
+  try {
+    return await tabManager.stop(tabId);
+  } catch (error: any) {
+    return { success: false, reason: error.message || 'STOP_FAILED' };
+  }
+});
+
 ipcMain.handle('gb:window-minimize', () => {
   mainWindow?.minimize();
   return { success: true };
@@ -165,8 +213,30 @@ ipcMain.handle('gb:focus-shell', () => {
   return { success: true };
 });
 
+ipcMain.handle('gb:zoom-adjust', (_event, { direction }) => {
+  if (direction !== 'in' && direction !== 'out') {
+    return { success: false, reason: 'INVALID_DIRECTION' };
+  }
+
+  const zoomFactor = tabManager.adjustZoom(direction);
+  return { success: true, zoomFactor };
+});
+
+ipcMain.handle('gb:zoom-reset', () => {
+  const zoomFactor = tabManager.resetZoom();
+  return { success: true, zoomFactor };
+});
+
+ipcMain.handle('gb:zoom-get', () => {
+  return { success: true, zoomFactor: tabManager.getZoomFactor() };
+});
+
 ipcMain.on('gb:heartbeat', (event, data) => {
   tabManager.handleHeartbeat(event.sender, data || {});
+});
+
+ipcMain.on('gb:shortcut-triggered', (_event, payload) => {
+  mainWindow?.webContents.send('gb:shortcut-triggered', payload);
 });
 
 app.whenReady().then(async () => {

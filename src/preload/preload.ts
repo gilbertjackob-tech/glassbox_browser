@@ -1,5 +1,6 @@
 import { ipcRenderer, contextBridge } from 'electron';
 import CryptoJS from 'crypto-js';
+import { parseShortcutEvent } from '../lib/shortcuts.js';
 
 // --- GlassBox DOM Intelligence ---
 
@@ -40,6 +41,137 @@ function getBestSelector(el: Element): string {
   return `${tag}:nth-of-type(${index + 1})`;
 }
 
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+
+  const tagName = target.tagName.toLowerCase();
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+}
+
+function requestZoom(direction: 'in' | 'out') {
+  void ipcRenderer.invoke('gb:zoom-adjust', { direction });
+}
+
+function isShellAppContext() {
+  return window.location.origin === 'http://127.0.0.1:3000' || window.location.origin === 'http://127.0.0.1:5173';
+}
+
+function installZoomShortcuts() {
+  window.addEventListener('wheel', (event) => {
+    if (!event.ctrlKey) return;
+
+    event.preventDefault();
+    requestZoom(event.deltaY < 0 ? 'in' : 'out');
+  }, { passive: false, capture: true });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.repeat) return;
+
+    if ((event.key === '0' && (event.ctrlKey || event.metaKey))) {
+      event.preventDefault();
+      void ipcRenderer.invoke('gb:zoom-reset');
+      return;
+    }
+
+    if (isEditableTarget(event.target)) return;
+    if (!event.shiftKey) return;
+
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      requestZoom('in');
+      return;
+    }
+
+    if (event.key === '-' || event.key === '_') {
+      event.preventDefault();
+      requestZoom('out');
+    }
+  }, true);
+}
+
+function installShortcutForwarding() {
+  if (isShellAppContext()) {
+    ipcRenderer.on('gb:shortcut-triggered', (_event, payload) => {
+      window.dispatchEvent(new CustomEvent('glassbox-shortcut', { detail: payload }));
+    });
+    return;
+  }
+
+  window.addEventListener('keydown', (event) => {
+    const shortcut = parseShortcutEvent(event);
+    if (!shortcut) return;
+
+    const allowedShortcuts = new Set([
+      'Ctrl+L',
+      'Ctrl+K',
+      'Alt+Left',
+      'Alt+Right',
+      'Ctrl+R',
+      'Ctrl+Shift+R',
+      'Esc',
+      'Ctrl+T',
+      'Ctrl+W',
+      'Ctrl+Shift+T',
+      'Ctrl+Tab',
+      'Ctrl+Shift+Tab',
+      'Alt+1',
+      'Alt+2',
+      'Alt+3',
+      'Alt+4',
+      'Alt+5',
+      'Alt+6',
+      'Alt+7',
+      'Alt+8',
+      'Alt+9',
+      'Ctrl+Shift+P',
+      'Ctrl+Alt+P',
+      'Ctrl+Alt+E',
+      'Ctrl+Alt+B',
+      'Ctrl+Alt+N',
+      'Ctrl+Alt+0',
+      'Ctrl+,',
+      'Ctrl+Alt+1',
+      'Ctrl+Alt+2',
+      'Ctrl+Alt+3',
+      'Ctrl+Alt+4',
+      'Ctrl+Alt+5',
+      'Ctrl+Alt+6',
+      'Ctrl+Alt+7',
+      'Ctrl+Alt+8',
+      'Ctrl+Shift+M',
+      'Ctrl+Shift+H',
+      'Ctrl+Shift+J',
+      'Ctrl+Shift+O',
+      'Ctrl+Shift+A',
+      'Ctrl+Shift+U',
+      'Ctrl+Alt+D',
+      'Ctrl+Alt+H',
+      'Ctrl+Alt+S',
+      'Ctrl+Alt+A',
+      'Ctrl+Alt+Q',
+      'Ctrl+Alt+X',
+      'Ctrl+Alt+C',
+      'Ctrl+Alt+V',
+      'Ctrl+Alt+R',
+      'Ctrl+Alt+L',
+      'Ctrl+Alt+Esc',
+      'Ctrl+Alt+Space',
+      'Ctrl+Alt+Backspace',
+      'Ctrl+Alt+Z',
+      'Ctrl+Shift+K',
+    ]);
+
+    if (!allowedShortcuts.has(shortcut)) return;
+
+    const allowedInEditable = shortcut === 'Ctrl+L' || shortcut === 'Ctrl+K' || shortcut === 'Esc';
+    if (isEditableTarget(event.target) && !allowedInEditable) return;
+
+    event.preventDefault();
+    ipcRenderer.send('gb:shortcut-triggered', { shortcut });
+  }, true);
+}
+
 // Expose API to Window
 contextBridge.exposeInMainWorld('glassbox', {
   getSnapshot: () => scanDOM(),
@@ -55,7 +187,15 @@ contextBridge.exposeInMainWorld('windowControls', {
   toggleMaximize: () => ipcRenderer.invoke('gb:window-toggle-maximize'),
   close: () => ipcRenderer.invoke('gb:window-close'),
   closeTab: (tabId: string) => ipcRenderer.invoke('gb:window-close-tab', { tabId }),
-  focusShell: () => ipcRenderer.invoke('gb:focus-shell')
+  focusShell: () => ipcRenderer.invoke('gb:focus-shell'),
+  tabBack: (tabId: string) => ipcRenderer.invoke('gb:tab-back', { tabId }),
+  tabForward: (tabId: string) => ipcRenderer.invoke('gb:tab-forward', { tabId }),
+  tabReload: (tabId: string, hard = false) => ipcRenderer.invoke('gb:tab-reload', { tabId, hard }),
+  tabStop: (tabId: string) => ipcRenderer.invoke('gb:tab-stop', { tabId }),
+  zoomIn: () => ipcRenderer.invoke('gb:zoom-adjust', { direction: 'in' }),
+  zoomOut: () => ipcRenderer.invoke('gb:zoom-adjust', { direction: 'out' }),
+  resetZoom: () => ipcRenderer.invoke('gb:zoom-reset'),
+  getZoom: () => ipcRenderer.invoke('gb:zoom-get')
 });
 
 // Periodic Heartbeat to Main Process
@@ -107,6 +247,9 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
   triggerScan();
 }
+
+installZoomShortcuts();
+installShortcutForwarding();
 
 // Fallback Heartbeat
 setInterval(triggerScan, 2000);

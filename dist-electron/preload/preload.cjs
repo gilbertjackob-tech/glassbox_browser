@@ -6578,6 +6578,141 @@ var require_crypto_js = __commonJS({
 // src/preload/preload.ts
 var import_electron = require("electron");
 var import_crypto_js = __toESM(require_crypto_js(), 1);
+
+// src/lib/shortcuts.ts
+var SPECIAL_KEY_LABELS = {
+  " ": "Space",
+  ",": ",",
+  Escape: "Esc",
+  ArrowLeft: "Left",
+  ArrowRight: "Right",
+  ArrowUp: "Up",
+  ArrowDown: "Down",
+  Tab: "Tab",
+  Enter: "Enter",
+  Backspace: "Backspace",
+  Delete: "Delete"
+};
+function createShortcut(id, command, keys, label, group, cli, payload) {
+  return {
+    id,
+    command,
+    keys: formatShortcut(keys),
+    label,
+    group,
+    cli,
+    payload
+  };
+}
+var tabIndexShortcuts = Array.from({ length: 8 }, (_, index) => {
+  const tabNumber = index + 1;
+  return createShortcut(
+    `tabs-switch-${tabNumber}`,
+    "switch_tab_index",
+    `Alt+${tabNumber}`,
+    `Switch to tab ${tabNumber}`,
+    "Tabs",
+    `gb tab use ${tabNumber}`,
+    { index }
+  );
+});
+var DEFAULT_SHORTCUTS = [
+  createShortcut("nav-focus-address-primary", "focus_address_bar", "Ctrl+L", "Focus address bar", "Navigation", "gb focus address"),
+  createShortcut("nav-focus-address-secondary", "focus_address_bar", "Ctrl+K", "Focus search/address bar", "Navigation", "gb focus address"),
+  createShortcut("nav-go", "navigate_current_input", "Enter", "Go or search", "Navigation", 'gb nav "<input>"'),
+  createShortcut("nav-back", "browser_back", "Alt+Left", "Back", "Navigation", "gb back"),
+  createShortcut("nav-forward", "browser_forward", "Alt+Right", "Forward", "Navigation", "gb forward"),
+  createShortcut("nav-reload", "reload_tab", "Ctrl+R", "Reload current tab", "Navigation", "gb reload"),
+  createShortcut("nav-hard-reload", "hard_reload_tab", "Ctrl+Shift+R", "Hard reload current tab", "Navigation", "gb reload --hard"),
+  createShortcut("nav-escape", "escape_or_stop", "Esc", "Stop loading or close overlay", "Navigation", "gb stop"),
+  createShortcut("tabs-new", "new_tab", "Ctrl+T", "New tab", "Tabs", "gb tab new"),
+  createShortcut("tabs-close", "close_tab", "Ctrl+W", "Close tab", "Tabs", "gb tab close"),
+  createShortcut("tabs-reopen", "reopen_tab", "Ctrl+Shift+T", "Reopen closed tab", "Tabs", "gb tab reopen"),
+  createShortcut("tabs-next", "next_tab", "Ctrl+Tab", "Next tab", "Tabs", "gb tab next"),
+  createShortcut("tabs-prev", "previous_tab", "Ctrl+Shift+Tab", "Previous tab", "Tabs", "gb tab prev"),
+  ...tabIndexShortcuts,
+  createShortcut("tabs-last", "switch_last_tab", "Alt+9", "Switch to last tab", "Tabs", "gb tab last"),
+  createShortcut("profiles-switcher", "open_profile_switcher", "Ctrl+Shift+P", "Open profile switcher", "Profiles", "gb profile list"),
+  createShortcut("profiles-settings", "settings_profiles", "Ctrl+Alt+P", "Open profiles settings", "Profiles", "gb settings profiles"),
+  createShortcut("profiles-detect-email", "detect_profile_email", "Ctrl+Alt+E", "Detect active profile email", "Profiles", "gb profile detect-email"),
+  createShortcut("profiles-backup", "settings_backup", "Ctrl+Alt+B", "Open backup and restore", "Profiles", "gb profile backup"),
+  createShortcut("profiles-create", "create_profile", "Ctrl+Alt+N", "Create new profile", "Profiles", "gb profile new"),
+  createShortcut("profiles-default", "switch_default_profile", "Ctrl+Alt+0", "Switch to default profile", "Profiles", "gb profile use default"),
+  createShortcut("settings-open", "open_settings", "Ctrl+,", "Open settings", "Settings", "gb settings"),
+  createShortcut("settings-profiles", "settings_profiles", "Ctrl+Alt+1", "Settings: Profiles", "Settings", "gb settings profiles"),
+  createShortcut("settings-backup", "settings_backup", "Ctrl+Alt+2", "Settings: Backup and Restore", "Settings", "gb settings backup"),
+  createShortcut("settings-appearance", "settings_appearance", "Ctrl+Alt+3", "Settings: Appearance", "Settings", "gb settings appearance"),
+  createShortcut("settings-search", "settings_search", "Ctrl+Alt+4", "Settings: Search Engine", "Settings", "gb settings search"),
+  createShortcut("settings-privacy", "settings_privacy", "Ctrl+Alt+5", "Settings: Privacy and Data", "Settings", "gb settings privacy"),
+  createShortcut("settings-automation", "settings_automation", "Ctrl+Alt+6", "Settings: Automation", "Settings", "gb settings automation"),
+  createShortcut("settings-shortcuts", "settings_shortcuts", "Ctrl+Alt+7", "Settings: Keyboard Shortcuts", "Settings", "gb settings shortcuts"),
+  createShortcut("settings-about", "settings_about", "Ctrl+Alt+8", "Settings: About", "Settings", "gb settings about"),
+  createShortcut("utility-memory", "toggle_memory_panel", "Ctrl+Shift+M", "Toggle memory search panel", "Utility Panels", "gb panel memory"),
+  createShortcut("utility-history", "toggle_history_panel", "Ctrl+Shift+H", "Toggle history panel", "Utility Panels", "gb panel history"),
+  createShortcut("utility-downloads", "toggle_downloads_panel", "Ctrl+Shift+J", "Toggle downloads panel", "Utility Panels", "gb panel downloads"),
+  createShortcut("utility-dom", "toggle_dom_panel", "Ctrl+Shift+O", "Toggle DOM snapshot panel", "Utility Panels", "gb panel dom"),
+  createShortcut("utility-logs", "toggle_logs_panel", "Ctrl+Shift+A", "Toggle activity log panel", "Utility Panels", "gb panel logs"),
+  createShortcut("utility-settings", "settings_utility", "Ctrl+Shift+U", "Open utility panel settings", "Utility Panels", "gb settings utility"),
+  createShortcut("automation-dom", "capture_dom", "Ctrl+Alt+D", "Capture DOM snapshot", "Automation", "gb dom"),
+  createShortcut("automation-html", "capture_html", "Ctrl+Alt+H", "Capture full HTML", "Automation", "gb html"),
+  createShortcut("automation-screenshot", "capture_screenshot", "Ctrl+Alt+S", "Capture screenshot", "Automation", "gb screenshot"),
+  createShortcut("automation-a11y", "capture_a11y", "Ctrl+Alt+A", "Capture accessibility tree", "Automation", "gb a11y"),
+  createShortcut("automation-query", "query_selector", "Ctrl+Alt+Q", "Query selector", "Automation", 'gb query "<selector>"'),
+  createShortcut("automation-inspect-cursor", "inspect_cursor", "Ctrl+Alt+X", "Inspect cursor element", "Automation", "gb inspect cursor"),
+  createShortcut("automation-copy-selector", "copy_selector", "Ctrl+Alt+C", "Copy selector", "Automation", "gb selector copy"),
+  createShortcut("automation-verify", "verify_last_action", "Ctrl+Alt+V", "Verify last action", "Automation", "gb verify"),
+  createShortcut("automation-retry", "retry_failed_action", "Ctrl+Alt+R", "Retry failed action", "Automation", "gb retry"),
+  createShortcut("automation-latest-log", "show_latest_log", "Ctrl+Alt+L", "Open latest action log", "Automation", "gb logs latest"),
+  createShortcut("safety-panic", "panic_stop", "Ctrl+Alt+Esc", "Panic stop automation", "Safety", "gb stop --panic"),
+  createShortcut("safety-pause", "toggle_automation_pause", "Ctrl+Alt+Space", "Pause or resume automation", "Safety", "gb pause"),
+  createShortcut("safety-clear-queue", "cancel_action_queue", "Ctrl+Alt+Backspace", "Cancel queued actions", "Safety", "gb queue clear"),
+  createShortcut("safety-undo", "undo_last_safe_action", "Ctrl+Alt+Z", "Undo last safe action", "Safety", "gb undo"),
+  createShortcut("command-palette", "open_command_palette", "Ctrl+Shift+K", "Open command palette", "Command", "gb commands")
+];
+function formatShortcut(input) {
+  const parts = input.split("+").map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return "";
+  const modifiers = /* @__PURE__ */ new Set();
+  let key = "";
+  for (const part of parts) {
+    const lowered = part.toLowerCase();
+    if (lowered === "ctrl" || lowered === "control") {
+      modifiers.add("Ctrl");
+    } else if (lowered === "alt" || lowered === "option") {
+      modifiers.add("Alt");
+    } else if (lowered === "shift") {
+      modifiers.add("Shift");
+    } else if (lowered === "meta" || lowered === "cmd" || lowered === "command") {
+      modifiers.add("Meta");
+    } else {
+      key = SPECIAL_KEY_LABELS[part] || SPECIAL_KEY_LABELS[part[0]?.toUpperCase() + part.slice(1)] || (part.length === 1 ? part.toUpperCase() : part);
+    }
+  }
+  const orderedModifiers = ["Ctrl", "Alt", "Shift", "Meta"].filter((modifier) => modifiers.has(modifier));
+  return [...orderedModifiers, key].filter(Boolean).join("+");
+}
+function normalizeEventKey(eventKey) {
+  if (SPECIAL_KEY_LABELS[eventKey]) {
+    return SPECIAL_KEY_LABELS[eventKey];
+  }
+  if (eventKey.length === 1) {
+    return eventKey.toUpperCase();
+  }
+  return eventKey;
+}
+function parseShortcutEvent(event) {
+  const parts = [];
+  if (event.ctrlKey) parts.push("Ctrl");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+  if (event.metaKey) parts.push("Meta");
+  const key = normalizeEventKey(event.key);
+  if (!key) return "";
+  parts.push(key);
+  return formatShortcut(parts.join("+"));
+}
+
+// src/preload/preload.ts
 function scanDOM() {
   const elements = Array.from(document.querySelectorAll("button, a, input, [role], [onclick], select, textarea")).slice(0, 500);
   const results = elements.map((el) => {
@@ -6609,6 +6744,120 @@ function getBestSelector(el) {
   const index = Array.from(document.querySelectorAll(tag)).indexOf(el);
   return `${tag}:nth-of-type(${index + 1})`;
 }
+function isEditableTarget(target) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tagName = target.tagName.toLowerCase();
+  return tagName === "input" || tagName === "textarea" || tagName === "select";
+}
+function requestZoom(direction) {
+  void import_electron.ipcRenderer.invoke("gb:zoom-adjust", { direction });
+}
+function isShellAppContext() {
+  return window.location.origin === "http://127.0.0.1:3000" || window.location.origin === "http://127.0.0.1:5173";
+}
+function installZoomShortcuts() {
+  window.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    requestZoom(event.deltaY < 0 ? "in" : "out");
+  }, { passive: false, capture: true });
+  window.addEventListener("keydown", (event) => {
+    if (event.repeat) return;
+    if (event.key === "0" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      void import_electron.ipcRenderer.invoke("gb:zoom-reset");
+      return;
+    }
+    if (isEditableTarget(event.target)) return;
+    if (!event.shiftKey) return;
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      requestZoom("in");
+      return;
+    }
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      requestZoom("out");
+    }
+  }, true);
+}
+function installShortcutForwarding() {
+  if (isShellAppContext()) {
+    import_electron.ipcRenderer.on("gb:shortcut-triggered", (_event, payload) => {
+      window.dispatchEvent(new CustomEvent("glassbox-shortcut", { detail: payload }));
+    });
+    return;
+  }
+  window.addEventListener("keydown", (event) => {
+    const shortcut = parseShortcutEvent(event);
+    if (!shortcut) return;
+    const allowedShortcuts = /* @__PURE__ */ new Set([
+      "Ctrl+L",
+      "Ctrl+K",
+      "Alt+Left",
+      "Alt+Right",
+      "Ctrl+R",
+      "Ctrl+Shift+R",
+      "Esc",
+      "Ctrl+T",
+      "Ctrl+W",
+      "Ctrl+Shift+T",
+      "Ctrl+Tab",
+      "Ctrl+Shift+Tab",
+      "Alt+1",
+      "Alt+2",
+      "Alt+3",
+      "Alt+4",
+      "Alt+5",
+      "Alt+6",
+      "Alt+7",
+      "Alt+8",
+      "Alt+9",
+      "Ctrl+Shift+P",
+      "Ctrl+Alt+P",
+      "Ctrl+Alt+E",
+      "Ctrl+Alt+B",
+      "Ctrl+Alt+N",
+      "Ctrl+Alt+0",
+      "Ctrl+,",
+      "Ctrl+Alt+1",
+      "Ctrl+Alt+2",
+      "Ctrl+Alt+3",
+      "Ctrl+Alt+4",
+      "Ctrl+Alt+5",
+      "Ctrl+Alt+6",
+      "Ctrl+Alt+7",
+      "Ctrl+Alt+8",
+      "Ctrl+Shift+M",
+      "Ctrl+Shift+H",
+      "Ctrl+Shift+J",
+      "Ctrl+Shift+O",
+      "Ctrl+Shift+A",
+      "Ctrl+Shift+U",
+      "Ctrl+Alt+D",
+      "Ctrl+Alt+H",
+      "Ctrl+Alt+S",
+      "Ctrl+Alt+A",
+      "Ctrl+Alt+Q",
+      "Ctrl+Alt+X",
+      "Ctrl+Alt+C",
+      "Ctrl+Alt+V",
+      "Ctrl+Alt+R",
+      "Ctrl+Alt+L",
+      "Ctrl+Alt+Esc",
+      "Ctrl+Alt+Space",
+      "Ctrl+Alt+Backspace",
+      "Ctrl+Alt+Z",
+      "Ctrl+Shift+K"
+    ]);
+    if (!allowedShortcuts.has(shortcut)) return;
+    const allowedInEditable = shortcut === "Ctrl+L" || shortcut === "Ctrl+K" || shortcut === "Esc";
+    if (isEditableTarget(event.target) && !allowedInEditable) return;
+    event.preventDefault();
+    import_electron.ipcRenderer.send("gb:shortcut-triggered", { shortcut });
+  }, true);
+}
 import_electron.contextBridge.exposeInMainWorld("glassbox", {
   getSnapshot: () => scanDOM(),
   activateTab: (tabId, bounds) => import_electron.ipcRenderer.invoke("gb:activate-tab", { tabId, bounds })
@@ -6621,7 +6870,15 @@ import_electron.contextBridge.exposeInMainWorld("windowControls", {
   toggleMaximize: () => import_electron.ipcRenderer.invoke("gb:window-toggle-maximize"),
   close: () => import_electron.ipcRenderer.invoke("gb:window-close"),
   closeTab: (tabId) => import_electron.ipcRenderer.invoke("gb:window-close-tab", { tabId }),
-  focusShell: () => import_electron.ipcRenderer.invoke("gb:focus-shell")
+  focusShell: () => import_electron.ipcRenderer.invoke("gb:focus-shell"),
+  tabBack: (tabId) => import_electron.ipcRenderer.invoke("gb:tab-back", { tabId }),
+  tabForward: (tabId) => import_electron.ipcRenderer.invoke("gb:tab-forward", { tabId }),
+  tabReload: (tabId, hard = false) => import_electron.ipcRenderer.invoke("gb:tab-reload", { tabId, hard }),
+  tabStop: (tabId) => import_electron.ipcRenderer.invoke("gb:tab-stop", { tabId }),
+  zoomIn: () => import_electron.ipcRenderer.invoke("gb:zoom-adjust", { direction: "in" }),
+  zoomOut: () => import_electron.ipcRenderer.invoke("gb:zoom-adjust", { direction: "out" }),
+  resetZoom: () => import_electron.ipcRenderer.invoke("gb:zoom-reset"),
+  getZoom: () => import_electron.ipcRenderer.invoke("gb:zoom-get")
 });
 var lastHash = "";
 var scanTimeout = null;
@@ -6666,6 +6923,8 @@ if (document.readyState === "complete" || document.readyState === "interactive")
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
   triggerScan();
 }
+installZoomShortcuts();
+installShortcutForwarding();
 setInterval(triggerScan, 2e3);
 /*! Bundled license information:
 
