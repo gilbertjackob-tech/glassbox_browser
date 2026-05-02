@@ -11,6 +11,7 @@ import {
   rememberSuccessfulTarget,
   targetMatchesKey,
 } from './targetMemoryService.js';
+import { saveMicroSkill } from './skillService.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -1441,7 +1442,7 @@ export const vlmPageApi = {
   },
 
   async runActionChain(tabId: string, body: any) {
-    getTabOrThrow(tabId);
+    const tab = getTabOrThrow(tabId);
 
     const steps = Array.isArray(body?.steps) ? body.steps : [];
     const stopOnFailure = body?.stopOnFailure !== false;
@@ -1579,6 +1580,19 @@ export const vlmPageApi = {
     }
 
     const ok = results.every((item) => item.ok);
+    let savedSkill: any = null;
+
+    if (ok && body?.saveAsSkill && typeof body.saveAsSkill === 'object') {
+      savedSkill = saveMicroSkill({
+        profileId: tab.profileId,
+        name: body.saveAsSkill.name,
+        queryPattern: typeof body.saveAsSkill.queryPattern === 'string'
+          ? body.saveAsSkill.queryPattern
+          : body.saveAsSkill.name,
+        steps,
+      });
+    }
+
     return {
       ok,
       tabId,
@@ -1586,6 +1600,7 @@ export const vlmPageApi = {
       completedCount: results.filter((item) => item.ok).length,
       failedAt: ok ? null : results.findIndex((item) => !item.ok),
       results,
+      savedSkill,
       elapsedMs: Date.now() - chainStartedAt,
     };
   },

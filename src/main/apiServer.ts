@@ -7,6 +7,7 @@ import db from './memoryDb.js';
 import { exportFullProfileBackup, importFullProfileBackup } from './profileBackupService.js';
 import { profileStore } from './profileStore.js';
 import { memoryService } from '../server/memoryService.js';
+import { listMicroSkills, saveMicroSkill } from '../server/skillService.js';
 import { tabManager } from '../server/tabManager.js';
 import { listTargetMemory, siteHostFromUrl } from '../server/targetMemoryService.js';
 import { vlmPageApi } from '../server/vlmPageApi.js';
@@ -68,6 +69,34 @@ export function startApiServer(port: number = 3000): Promise<void> {
         const profileId = resolveProfileId(req.query.profileId);
         const host = typeof req.query.host === 'string' ? req.query.host : undefined;
         res.json(listTargetMemory(profileId, host));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.get('/api/skills', (req, res) => {
+      try {
+        const profileId = resolveProfileId(req.query.profileId);
+        res.json(listMicroSkills(profileId));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/skills', (req, res) => {
+      try {
+        const profileId = resolveProfileId(req.body?.profileId);
+        const skill = saveMicroSkill({
+          profileId,
+          name: req.body?.name,
+          queryPattern: typeof req.body?.queryPattern === 'string' ? req.body.queryPattern : undefined,
+          steps: req.body?.steps,
+        });
+
+        res.json({
+          ok: true,
+          skill,
+        });
       } catch (error: any) {
         errorResponse(res, error);
       }
