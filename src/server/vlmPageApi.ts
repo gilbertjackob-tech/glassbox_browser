@@ -1099,6 +1099,311 @@ export const vlmPageApi = {
     throw new Error('UNREACHABLE_ACTION');
   },
 
+  async actionResolveAndAct(tabId: string, body: any) {
+    const action = typeof body?.action === 'string' ? body.action : '';
+    if (!action) {
+      throw new Error('ACTION_REQUIRED');
+    }
+
+    const allowedActions = new Set(['click', 'type', 'focus', 'clear', 'press']);
+    if (!allowedActions.has(action)) {
+      throw new Error('UNSUPPORTED_TARGET_ACTION');
+    }
+
+    const resolved = await this.resolveTarget(tabId, body);
+    if (!resolved?.found || !resolved?.target) {
+      return {
+        ok: false,
+        reason: 'TARGET_NOT_RESOLVED',
+        resolve: resolved,
+      };
+    }
+
+    if (resolved.source === 'scan') {
+      const delegated = await this.actionByTarget(tabId, {
+        targetId: resolved.target.targetId,
+        action,
+        text: body?.text,
+        keys: body?.keys,
+        key: body?.key,
+        clearFirst: body?.clearFirst,
+        targetType: body?.targetType,
+      });
+
+      return {
+        ...delegated,
+        resolve: resolved,
+      };
+    }
+
+    const tab = getTabOrThrow(tabId);
+    const target: ActionTarget = {
+      targetId: typeof resolved.target.targetId === 'string' ? resolved.target.targetId : `memory_${resolved.targetKey || 'target'}`,
+      kind: String(resolved.target.kind || 'card'),
+      label: String(resolved.target.label || ''),
+      selector: String(resolved.target.selector || ''),
+      bbox: resolved.target.bbox || { x: 0, y: 0, width: 0, height: 0 },
+      visible: Boolean(resolved.target.visible),
+      enabled: Boolean(resolved.target.enabled),
+      actions: Array.isArray(resolved.target.actions) ? resolved.target.actions : [],
+      text: String(resolved.target.text || ''),
+    };
+
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
+
+    const verification = await verifyTargetInPage(tab, target);
+    if (!verification.ok) {
+      return {
+        ok: false,
+        reason: verification.reason,
+        target,
+        resolve: resolved,
+      };
+    }
+
+    const beforeValue = typeof verification.value === 'string' ? verification.value : null;
+    const focusSelector = target.selector;
+
+    if (action === 'click') {
+      const result = await this.click(tabId, { selector: target.selector });
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId: target.targetId,
+        action,
+        target,
+        verification,
+        clickResult: result,
+        actionVerification,
+        resolve: resolved,
+      });
+      await logAction(tab, 'resolve_and_act.click', { targetId: target.targetId, selector: target.selector }, null, true, 'RESOLVE_AND_ACT_CLICK_SENT', evidence);
+      return {
+        ok: true,
+        action,
+        source: 'memory',
+        targetId: target.targetId,
+        target,
+        result,
+        verification: actionVerification,
+        memoryRecord,
+        resolve: resolved,
+        evidence,
+      };
+    }
+
+    if (action === 'type') {
+      const text = typeof body?.text === 'string' ? body.text : '';
+      const keys = Array.isArray(body?.keys) ? body.keys.filter((key: unknown) => typeof key === 'string') : [];
+      if (!text && keys.length === 0) {
+        throw new Error('TEXT_OR_KEYS_REQUIRED');
+      }
+
+      const result = await this.type(tabId, {
+        selector: target.selector,
+        text,
+        keys,
+        clearFirst: Boolean(body?.clearFirst),
+        targetType: body?.targetType,
+      });
+      const afterValue = await runInPage(tab, (selector: string) => {
+        const el = document.querySelector(selector) as HTMLInputElement | null;
+        return el ? (el.value ?? '') : null;
+      }, [target.selector]).catch(() => null);
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId: target.targetId,
+        action,
+        target,
+        verification,
+        typedLength: text.length,
+        keys,
+        afterValue,
+        actionVerification,
+        resolve: resolved,
+      });
+      await logAction(tab, 'resolve_and_act.type', { targetId: target.targetId, selector: target.selector }, body?.targetType === 'password' ? '[MASKED]' : text, true, 'RESOLVE_AND_ACT_TYPE_SENT', evidence);
+      return {
+        ok: true,
+        action,
+        source: 'memory',
+        targetId: target.targetId,
+        target,
+        typed: text.length,
+        keys,
+        afterValue,
+        result,
+        verification: actionVerification,
+        memoryRecord,
+        resolve: resolved,
+        evidence,
+      };
+    }
+
+    if (action === 'focus') {
+      const focused = await runInPage(tab, (selector: string) => {
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (!el) return false;
+        el.focus();
+        return document.activeElement === el;
+      }, [target.selector]);
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId: target.targetId,
+        action,
+        target,
+        verification,
+        focused,
+        actionVerification,
+        resolve: resolved,
+      });
+      await logAction(tab, 'resolve_and_act.focus', { targetId: target.targetId, selector: target.selector }, null, Boolean(focused), focused ? 'RESOLVE_AND_ACT_FOCUSED' : 'RESOLVE_AND_ACT_FOCUS_NOT_CONFIRMED', evidence);
+      return {
+        ok: Boolean(focused),
+        action,
+        source: 'memory',
+        targetId: target.targetId,
+        target,
+        focused,
+        verification: actionVerification,
+        memoryRecord,
+        resolve: resolved,
+        evidence,
+      };
+    }
+
+    if (action === 'clear') {
+      const cleared = await runInPage(tab, (selector: string) => {
+        const el = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (!el) return false;
+        el.focus();
+        if ('value' in el) {
+          el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return el.value === '';
+        }
+        return false;
+      }, [target.selector]);
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId: target.targetId,
+        action,
+        target,
+        verification,
+        cleared,
+        actionVerification,
+        resolve: resolved,
+      });
+      await logAction(tab, 'resolve_and_act.clear', { targetId: target.targetId, selector: target.selector }, null, Boolean(cleared), cleared ? 'RESOLVE_AND_ACT_CLEARED' : 'RESOLVE_AND_ACT_CLEAR_FAILED', evidence);
+      return {
+        ok: Boolean(cleared),
+        action,
+        source: 'memory',
+        targetId: target.targetId,
+        target,
+        cleared,
+        verification: actionVerification,
+        memoryRecord,
+        resolve: resolved,
+        evidence,
+      };
+    }
+
+    if (action === 'press') {
+      const keys = Array.isArray(body?.keys)
+        ? body.keys.filter((key: unknown) => typeof key === 'string')
+        : (typeof body?.key === 'string' ? [body.key] : []);
+      if (keys.length === 0) {
+        throw new Error('KEY_REQUIRED');
+      }
+
+      const result = await this.type(tabId, {
+        selector: target.selector,
+        keys,
+      });
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId: target.targetId,
+        action,
+        target,
+        verification,
+        keys,
+        result,
+        actionVerification,
+        resolve: resolved,
+      });
+      await logAction(tab, 'resolve_and_act.press', { targetId: target.targetId, selector: target.selector }, keys.join('+'), true, 'RESOLVE_AND_ACT_PRESS_SENT', evidence);
+      return {
+        ok: true,
+        action,
+        source: 'memory',
+        targetId: target.targetId,
+        target,
+        keys,
+        result,
+        verification: actionVerification,
+        memoryRecord,
+        resolve: resolved,
+        evidence,
+      };
+    }
+
+    throw new Error('UNREACHABLE_ACTION');
+  },
+
   async screenshot(tabId: string, options: { selector?: string; highlight?: boolean }) {
     const tab = getTabOrThrow(tabId);
     const selector = options.selector;

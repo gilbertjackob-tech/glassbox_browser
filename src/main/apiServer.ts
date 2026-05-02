@@ -448,6 +448,14 @@ export function startApiServer(port: number = 3000): Promise<void> {
       }
     });
 
+    app.post('/api/tabs/:id/action/resolve-and-act', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.actionResolveAndAct(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
     app.post('/api/tabs/:id/memory/resolve-target', async (req, res) => {
       try {
         const tab = tabManager.getTab(req.params.id);
