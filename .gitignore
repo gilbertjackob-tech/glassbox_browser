@@ -43,6 +43,11 @@ GrShaderCache/
 screenshots/
 captures/
 recordings/
-# debug/
+debug/
+debug-*/
+*-output/
 tmp/
 temp/
+
+!test-artifacts/
+!test-artifacts/**
