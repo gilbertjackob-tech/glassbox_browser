@@ -26449,6 +26449,7 @@ var memoryService = new MemoryService();
 
 // src/server/vlmPageApi.ts
 var import_crypto2 = require("crypto");
+var actionTargetCache = /* @__PURE__ */ new Map();
 function getTabOrThrow(tabId) {
   const tab = tabManager.getTab(tabId);
   if (!tab) {
@@ -26567,6 +26568,40 @@ function keyForElectron(key) {
     ArrowRight: "Right"
   };
   return aliases[key] || key;
+}
+async function getTargetSnapshot(tabId) {
+  const cached = actionTargetCache.get(tabId);
+  if (cached && Date.now() - cached.capturedAt < 5e3) {
+    return cached;
+  }
+  return await vlmPageApi.actionTargets(tabId);
+}
+async function verifyTargetInPage(tab, target) {
+  return await runInPage(tab, (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) {
+      return {
+        ok: false,
+        reason: "ELEMENT_NOT_FOUND"
+      };
+    }
+    const rect = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    const visible = rect.width > 0 && rect.height > 0 && rect.bottom >= 0 && rect.right >= 0 && rect.top <= window.innerHeight && rect.left <= window.innerWidth && style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0" && !el.hidden;
+    const enabled = !el.disabled && style.pointerEvents !== "none" && el.getAttribute("aria-disabled") !== "true";
+    return {
+      ok: visible && enabled,
+      reason: !visible ? "ELEMENT_NOT_VISIBLE" : !enabled ? "ELEMENT_DISABLED" : "OK",
+      bbox: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      },
+      value: el.value ?? "",
+      text: (el.innerText || el.textContent || "").trim().slice(0, 300)
+    };
+  }, [target.selector]);
 }
 var vlmPageApi = {
   async getHtml(tabId) {
@@ -26749,13 +26784,222 @@ var vlmPageApi = {
       }).filter(Boolean).slice(0, 400);
       return targets2;
     });
-    return {
+    const snapshot = {
       tabId,
       url: tab.webContents.getURL(),
       title: tab.title,
       stateHash: await getDomHash(tab),
-      targets
+      targets,
+      capturedAt: Date.now()
     };
+    actionTargetCache.set(tabId, snapshot);
+    return snapshot;
+  },
+  async actionByTarget(tabId, body) {
+    const tab = getTabOrThrow(tabId);
+    const targetId = typeof body?.targetId === "string" ? body.targetId : "";
+    const action = typeof body?.action === "string" ? body.action : "";
+    if (!targetId) {
+      throw new Error("TARGET_ID_REQUIRED");
+    }
+    if (!action) {
+      throw new Error("ACTION_REQUIRED");
+    }
+    const allowedActions = /* @__PURE__ */ new Set(["click", "type", "focus", "clear", "press"]);
+    if (!allowedActions.has(action)) {
+      throw new Error("UNSUPPORTED_TARGET_ACTION");
+    }
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab)
+    };
+    const snapshot = await getTargetSnapshot(tabId);
+    if (typeof body?.stateHash === "string" && body.stateHash && body.stateHash !== snapshot.stateHash) {
+      return {
+        ok: false,
+        reason: "STATE_CHANGED",
+        needsRefresh: true,
+        currentStateHash: snapshot.stateHash,
+        providedStateHash: body.stateHash
+      };
+    }
+    const target = snapshot.targets.find((item) => item.targetId === targetId);
+    if (!target) {
+      return {
+        ok: false,
+        reason: "TARGET_ID_NOT_FOUND",
+        needsRefresh: true,
+        stateHash: snapshot.stateHash
+      };
+    }
+    if (!target.enabled || !target.visible) {
+      return {
+        ok: false,
+        reason: !target.visible ? "TARGET_NOT_VISIBLE" : "TARGET_DISABLED",
+        target,
+        stateHash: snapshot.stateHash
+      };
+    }
+    const verification = await verifyTargetInPage(tab, target);
+    if (!verification.ok) {
+      return {
+        ok: false,
+        reason: verification.reason,
+        target,
+        stateHash: snapshot.stateHash
+      };
+    }
+    if (action === "click") {
+      const result = await this.click(tabId, {
+        selector: target.selector
+      });
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        clickResult: result
+      });
+      await logAction(tab, "target.click", { targetId, selector: target.selector }, null, true, "TARGET_CLICK_SENT", evidence);
+      return {
+        ok: true,
+        action,
+        targetId,
+        target,
+        result,
+        evidence
+      };
+    }
+    if (action === "type") {
+      const text = typeof body?.text === "string" ? body.text : "";
+      const keys = Array.isArray(body?.keys) ? body.keys.filter((key) => typeof key === "string") : [];
+      if (!text && keys.length === 0) {
+        throw new Error("TEXT_OR_KEYS_REQUIRED");
+      }
+      const result = await this.type(tabId, {
+        selector: target.selector,
+        text,
+        keys,
+        clearFirst: Boolean(body?.clearFirst),
+        targetType: body?.targetType
+      });
+      const afterValue = await runInPage(tab, (selector) => {
+        const el = document.querySelector(selector);
+        return el ? el.value ?? "" : null;
+      }, [target.selector]).catch(() => null);
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        typedLength: text.length,
+        keys,
+        afterValue
+      });
+      await logAction(
+        tab,
+        "target.type",
+        { targetId, selector: target.selector },
+        body?.targetType === "password" ? "[MASKED]" : text,
+        true,
+        "TARGET_TYPE_SENT",
+        evidence
+      );
+      return {
+        ok: true,
+        action,
+        targetId,
+        target,
+        typed: text.length,
+        keys,
+        afterValue,
+        result,
+        evidence
+      };
+    }
+    if (action === "focus") {
+      const focused = await runInPage(tab, (selector) => {
+        const el = document.querySelector(selector);
+        if (!el) return false;
+        el.focus();
+        return document.activeElement === el;
+      }, [target.selector]);
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        focused
+      });
+      await logAction(tab, "target.focus", { targetId, selector: target.selector }, null, Boolean(focused), focused ? "TARGET_FOCUSED" : "FOCUS_NOT_CONFIRMED", evidence);
+      return {
+        ok: Boolean(focused),
+        action,
+        targetId,
+        target,
+        focused,
+        evidence
+      };
+    }
+    if (action === "clear") {
+      const cleared = await runInPage(tab, (selector) => {
+        const el = document.querySelector(selector);
+        if (!el) return false;
+        el.focus();
+        if ("value" in el) {
+          el.value = "";
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          return el.value === "";
+        }
+        return false;
+      }, [target.selector]);
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        cleared
+      });
+      await logAction(tab, "target.clear", { targetId, selector: target.selector }, null, Boolean(cleared), cleared ? "TARGET_CLEARED" : "CLEAR_FAILED", evidence);
+      return {
+        ok: Boolean(cleared),
+        action,
+        targetId,
+        target,
+        cleared,
+        evidence
+      };
+    }
+    if (action === "press") {
+      const keys = Array.isArray(body?.keys) ? body.keys.filter((key) => typeof key === "string") : typeof body?.key === "string" ? [body.key] : [];
+      if (keys.length === 0) {
+        throw new Error("KEY_REQUIRED");
+      }
+      const result = await this.type(tabId, {
+        selector: target.selector,
+        keys
+      });
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        keys,
+        result
+      });
+      await logAction(tab, "target.press", { targetId, selector: target.selector }, keys.join("+"), true, "TARGET_PRESS_SENT", evidence);
+      return {
+        ok: true,
+        action,
+        targetId,
+        target,
+        keys,
+        result,
+        evidence
+      };
+    }
+    throw new Error("UNREACHABLE_ACTION");
   },
   async screenshot(tabId, options) {
     const tab = getTabOrThrow(tabId);
@@ -27372,6 +27616,13 @@ function startApiServer(port = 3e3) {
         res.json(await vlmPageApi.actionTargets(req.params.id));
       } catch (error) {
         errorResponse(res, error, 404);
+      }
+    });
+    app4.post("/api/tabs/:id/action/by-target", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.actionByTarget(req.params.id, req.body || {}));
+      } catch (error) {
+        errorResponse(res, error);
       }
     });
     app4.post("/api/tabs/:id/action/click", async (req, res) => {

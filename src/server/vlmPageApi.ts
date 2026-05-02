@@ -14,6 +14,29 @@ interface ResolvedPoint {
   xpath?: string;
 }
 
+type ActionTarget = {
+  targetId: string;
+  kind: string;
+  label: string;
+  selector: string;
+  bbox: { x: number; y: number; width: number; height: number };
+  visible: boolean;
+  enabled: boolean;
+  actions: string[];
+  text: string;
+};
+
+type ActionTargetSnapshot = {
+  tabId: string;
+  url: string;
+  title: string;
+  stateHash: string;
+  targets: ActionTarget[];
+  capturedAt: number;
+};
+
+const actionTargetCache = new Map<string, ActionTargetSnapshot>();
+
 function getTabOrThrow(tabId: string) {
   const tab = tabManager.getTab(tabId);
   if (!tab) {
@@ -156,6 +179,59 @@ function keyForElectron(key: string) {
   };
 
   return aliases[key] || key;
+}
+
+async function getTargetSnapshot(tabId: string): Promise<ActionTargetSnapshot> {
+  const cached = actionTargetCache.get(tabId);
+  if (cached && Date.now() - cached.capturedAt < 5000) {
+    return cached;
+  }
+  return await vlmPageApi.actionTargets(tabId) as ActionTargetSnapshot;
+}
+
+async function verifyTargetInPage(tab: TabMetadata, target: ActionTarget) {
+  return await runInPage(tab, (selector: string) => {
+    const el = document.querySelector(selector) as HTMLElement | null;
+    if (!el) {
+      return {
+        ok: false,
+        reason: 'ELEMENT_NOT_FOUND',
+      };
+    }
+
+    const rect = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+
+    const visible =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom >= 0 &&
+      rect.right >= 0 &&
+      rect.top <= window.innerHeight &&
+      rect.left <= window.innerWidth &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.opacity !== '0' &&
+      !el.hidden;
+
+    const enabled =
+      !(el as any).disabled &&
+      style.pointerEvents !== 'none' &&
+      el.getAttribute('aria-disabled') !== 'true';
+
+    return {
+      ok: visible && enabled,
+      reason: !visible ? 'ELEMENT_NOT_VISIBLE' : !enabled ? 'ELEMENT_DISABLED' : 'OK',
+      bbox: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+      value: (el as HTMLInputElement).value ?? '',
+      text: (el.innerText || el.textContent || '').trim().slice(0, 300),
+    };
+  }, [target.selector]);
 }
 
 export const vlmPageApi = {
@@ -381,13 +457,257 @@ export const vlmPageApi = {
       return targets;
     });
 
-    return {
+    const snapshot: ActionTargetSnapshot = {
       tabId,
       url: tab.webContents.getURL(),
       title: tab.title,
       stateHash: await getDomHash(tab),
-      targets,
+      targets: targets as ActionTarget[],
+      capturedAt: Date.now(),
     };
+
+    actionTargetCache.set(tabId, snapshot);
+    return snapshot;
+  },
+
+  async actionByTarget(tabId: string, body: any) {
+    const tab = getTabOrThrow(tabId);
+    const targetId = typeof body?.targetId === 'string' ? body.targetId : '';
+    const action = typeof body?.action === 'string' ? body.action : '';
+
+    if (!targetId) {
+      throw new Error('TARGET_ID_REQUIRED');
+    }
+    if (!action) {
+      throw new Error('ACTION_REQUIRED');
+    }
+
+    const allowedActions = new Set(['click', 'type', 'focus', 'clear', 'press']);
+    if (!allowedActions.has(action)) {
+      throw new Error('UNSUPPORTED_TARGET_ACTION');
+    }
+
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
+
+    const snapshot = await getTargetSnapshot(tabId);
+    if (typeof body?.stateHash === 'string' && body.stateHash && body.stateHash !== snapshot.stateHash) {
+      return {
+        ok: false,
+        reason: 'STATE_CHANGED',
+        needsRefresh: true,
+        currentStateHash: snapshot.stateHash,
+        providedStateHash: body.stateHash,
+      };
+    }
+
+    const target = snapshot.targets.find((item) => item.targetId === targetId);
+    if (!target) {
+      return {
+        ok: false,
+        reason: 'TARGET_ID_NOT_FOUND',
+        needsRefresh: true,
+        stateHash: snapshot.stateHash,
+      };
+    }
+
+    if (!target.enabled || !target.visible) {
+      return {
+        ok: false,
+        reason: !target.visible ? 'TARGET_NOT_VISIBLE' : 'TARGET_DISABLED',
+        target,
+        stateHash: snapshot.stateHash,
+      };
+    }
+
+    const verification = await verifyTargetInPage(tab, target);
+    if (!verification.ok) {
+      return {
+        ok: false,
+        reason: verification.reason,
+        target,
+        stateHash: snapshot.stateHash,
+      };
+    }
+
+    if (action === 'click') {
+      const result = await this.click(tabId, {
+        selector: target.selector,
+      });
+
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        clickResult: result,
+      });
+
+      await logAction(tab, 'target.click', { targetId, selector: target.selector }, null, true, 'TARGET_CLICK_SENT', evidence);
+      return {
+        ok: true,
+        action,
+        targetId,
+        target,
+        result,
+        evidence,
+      };
+    }
+
+    if (action === 'type') {
+      const text = typeof body?.text === 'string' ? body.text : '';
+      const keys = Array.isArray(body?.keys) ? body.keys.filter((key: unknown) => typeof key === 'string') : [];
+      if (!text && keys.length === 0) {
+        throw new Error('TEXT_OR_KEYS_REQUIRED');
+      }
+
+      const result = await this.type(tabId, {
+        selector: target.selector,
+        text,
+        keys,
+        clearFirst: Boolean(body?.clearFirst),
+        targetType: body?.targetType,
+      });
+
+      const afterValue = await runInPage(tab, (selector: string) => {
+        const el = document.querySelector(selector) as HTMLInputElement | null;
+        return el ? (el.value ?? '') : null;
+      }, [target.selector]).catch(() => null);
+
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        typedLength: text.length,
+        keys,
+        afterValue,
+      });
+
+      await logAction(
+        tab,
+        'target.type',
+        { targetId, selector: target.selector },
+        body?.targetType === 'password' ? '[MASKED]' : text,
+        true,
+        'TARGET_TYPE_SENT',
+        evidence
+      );
+
+      return {
+        ok: true,
+        action,
+        targetId,
+        target,
+        typed: text.length,
+        keys,
+        afterValue,
+        result,
+        evidence,
+      };
+    }
+
+    if (action === 'focus') {
+      const focused = await runInPage(tab, (selector: string) => {
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (!el) return false;
+        el.focus();
+        return document.activeElement === el;
+      }, [target.selector]);
+
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        focused,
+      });
+
+      await logAction(tab, 'target.focus', { targetId, selector: target.selector }, null, Boolean(focused), focused ? 'TARGET_FOCUSED' : 'FOCUS_NOT_CONFIRMED', evidence);
+      return {
+        ok: Boolean(focused),
+        action,
+        targetId,
+        target,
+        focused,
+        evidence,
+      };
+    }
+
+    if (action === 'clear') {
+      const cleared = await runInPage(tab, (selector: string) => {
+        const el = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (!el) return false;
+
+        el.focus();
+
+        if ('value' in el) {
+          el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return el.value === '';
+        }
+
+        return false;
+      }, [target.selector]);
+
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        cleared,
+      });
+
+      await logAction(tab, 'target.clear', { targetId, selector: target.selector }, null, Boolean(cleared), cleared ? 'TARGET_CLEARED' : 'CLEAR_FAILED', evidence);
+      return {
+        ok: Boolean(cleared),
+        action,
+        targetId,
+        target,
+        cleared,
+        evidence,
+      };
+    }
+
+    if (action === 'press') {
+      const keys = Array.isArray(body?.keys)
+        ? body.keys.filter((key: unknown) => typeof key === 'string')
+        : (typeof body?.key === 'string' ? [body.key] : []);
+
+      if (keys.length === 0) {
+        throw new Error('KEY_REQUIRED');
+      }
+
+      const result = await this.type(tabId, {
+        selector: target.selector,
+        keys,
+      });
+
+      const evidence = await collectActionEvidence(tab, before, {
+        targetId,
+        action,
+        target,
+        verification,
+        keys,
+        result,
+      });
+
+      await logAction(tab, 'target.press', { targetId, selector: target.selector }, keys.join('+'), true, 'TARGET_PRESS_SENT', evidence);
+      return {
+        ok: true,
+        action,
+        targetId,
+        target,
+        keys,
+        result,
+        evidence,
+      };
+    }
+
+    throw new Error('UNREACHABLE_ACTION');
   },
 
   async screenshot(tabId: string, options: { selector?: string; highlight?: boolean }) {
