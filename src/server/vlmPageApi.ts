@@ -37,6 +37,19 @@ type ActionTargetSnapshot = {
 
 const actionTargetCache = new Map<string, ActionTargetSnapshot>();
 
+type PageStateSnapshot = {
+  url: string;
+  title: string;
+  readyState: string;
+  loading: boolean;
+  domHash: string;
+  activeElement: {
+    tag: string | null;
+    selector: string | null;
+    value: string | null;
+  };
+};
+
 function getTabOrThrow(tabId: string) {
   const tab = tabManager.getTab(tabId);
   if (!tab) {
@@ -234,7 +247,109 @@ async function verifyTargetInPage(tab: TabMetadata, target: ActionTarget) {
   }, [target.selector]);
 }
 
+async function getPageStateSnapshot(tab: TabMetadata): Promise<PageStateSnapshot> {
+  const pageState = await runInPage(tab, () => {
+    function selectorFor(el: Element | null): string | null {
+      if (!el) return null;
+      if ((el as HTMLElement).id) {
+        return `#${CSS.escape((el as HTMLElement).id)}`;
+      }
+
+      const htmlEl = el as HTMLElement;
+      const name = htmlEl.getAttribute('name');
+      if (name) return `${el.tagName.toLowerCase()}[name="${name.replace(/"/g, '\\"')}"]`;
+
+      const ariaLabel = htmlEl.getAttribute('aria-label');
+      if (ariaLabel) return `${el.tagName.toLowerCase()}[aria-label="${ariaLabel.replace(/"/g, '\\"')}"]`;
+
+      const parent = el.parentElement;
+      if (!parent) return el.tagName.toLowerCase();
+      const sameTag = Array.from(parent.children).filter((child) => child.tagName === el.tagName);
+      const index = sameTag.indexOf(el) + 1;
+      return `${el.tagName.toLowerCase()}:nth-of-type(${Math.max(1, index)})`;
+    }
+
+    const active = document.activeElement as HTMLElement | null;
+    const activeValue = active && 'value' in active ? String((active as HTMLInputElement).value ?? '') : null;
+    return {
+      title: document.title || '',
+      readyState: document.readyState || 'unknown',
+      activeElement: {
+        tag: active?.tagName?.toLowerCase() ?? null,
+        selector: selectorFor(active),
+        value: activeValue,
+      },
+    };
+  });
+
+  return {
+    url: tab.webContents.getURL(),
+    title: pageState.title,
+    readyState: pageState.readyState,
+    loading: tab.webContents.isLoading(),
+    domHash: await getDomHash(tab),
+    activeElement: pageState.activeElement,
+  };
+}
+
+async function waitForPageStable(tab: TabMetadata, timeoutMs = 1000, quietMs = 300) {
+  const started = Date.now();
+  let lastMarker = '';
+  let lastChangeAt = Date.now();
+
+  while (Date.now() - started < timeoutMs) {
+    const snapshot = await runInPage(tab, () => ({
+      readyState: document.readyState,
+      url: location.href,
+      marker: `${document.readyState}|${location.href}|${document.title}|${document.documentElement?.innerHTML?.length ?? 0}`,
+    }));
+    const loading = tab.webContents.isLoading();
+
+    if (snapshot.marker !== lastMarker) {
+      lastMarker = snapshot.marker;
+      lastChangeAt = Date.now();
+    }
+
+    const quietFor = Date.now() - lastChangeAt;
+    if (!loading && snapshot.readyState === 'complete' && quietFor >= quietMs) {
+      return { loadingStable: true, elapsedMs: Date.now() - started };
+    }
+
+    await sleep(100);
+  }
+
+  return { loadingStable: false, elapsedMs: Date.now() - started };
+}
+
+async function buildActionVerification(
+  tab: TabMetadata,
+  before: { url: string; domHash: string },
+  options: { beforeValue?: string | null; expectFocusSelector?: string | null } = {}
+) {
+  const stable = await waitForPageStable(tab);
+  const after = await getPageStateSnapshot(tab);
+  const beforeValue = options.beforeValue ?? null;
+  const afterValue = after.activeElement.value ?? null;
+  const focusSelector = options.expectFocusSelector ?? null;
+
+  return {
+    urlChanged: before.url !== after.url,
+    domChanged: before.domHash !== after.domHash,
+    valueChanged: beforeValue !== null ? beforeValue !== afterValue : null,
+    focusConfirmed: focusSelector ? after.activeElement.selector === focusSelector : null,
+    loadingStable: stable.loadingStable,
+    stableElapsedMs: stable.elapsedMs,
+    beforeValue,
+    afterValue,
+  };
+}
+
 export const vlmPageApi = {
+  async getState(tabId: string) {
+    const tab = getTabOrThrow(tabId);
+    return await getPageStateSnapshot(tab);
+  },
+
   async getHtml(tabId: string) {
     const tab = getTabOrThrow(tabId);
     const html = await runInPage(tab, () => document.documentElement.outerHTML);
@@ -532,9 +647,16 @@ export const vlmPageApi = {
       };
     }
 
+    const beforeValue = typeof verification.value === 'string' ? verification.value : null;
+    const focusSelector = target.selector;
+
     if (action === 'click') {
       const result = await this.click(tabId, {
         selector: target.selector,
+      });
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
       });
 
       const evidence = await collectActionEvidence(tab, before, {
@@ -543,6 +665,7 @@ export const vlmPageApi = {
         target,
         verification,
         clickResult: result,
+        actionVerification,
       });
 
       await logAction(tab, 'target.click', { targetId, selector: target.selector }, null, true, 'TARGET_CLICK_SENT', evidence);
@@ -552,6 +675,7 @@ export const vlmPageApi = {
         targetId,
         target,
         result,
+        verification: actionVerification,
         evidence,
       };
     }
@@ -575,6 +699,10 @@ export const vlmPageApi = {
         const el = document.querySelector(selector) as HTMLInputElement | null;
         return el ? (el.value ?? '') : null;
       }, [target.selector]).catch(() => null);
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
 
       const evidence = await collectActionEvidence(tab, before, {
         targetId,
@@ -584,6 +712,7 @@ export const vlmPageApi = {
         typedLength: text.length,
         keys,
         afterValue,
+        actionVerification,
       });
 
       await logAction(
@@ -605,6 +734,7 @@ export const vlmPageApi = {
         keys,
         afterValue,
         result,
+        verification: actionVerification,
         evidence,
       };
     }
@@ -616,6 +746,10 @@ export const vlmPageApi = {
         el.focus();
         return document.activeElement === el;
       }, [target.selector]);
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
 
       const evidence = await collectActionEvidence(tab, before, {
         targetId,
@@ -623,6 +757,7 @@ export const vlmPageApi = {
         target,
         verification,
         focused,
+        actionVerification,
       });
 
       await logAction(tab, 'target.focus', { targetId, selector: target.selector }, null, Boolean(focused), focused ? 'TARGET_FOCUSED' : 'FOCUS_NOT_CONFIRMED', evidence);
@@ -632,6 +767,7 @@ export const vlmPageApi = {
         targetId,
         target,
         focused,
+        verification: actionVerification,
         evidence,
       };
     }
@@ -652,6 +788,10 @@ export const vlmPageApi = {
 
         return false;
       }, [target.selector]);
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
 
       const evidence = await collectActionEvidence(tab, before, {
         targetId,
@@ -659,6 +799,7 @@ export const vlmPageApi = {
         target,
         verification,
         cleared,
+        actionVerification,
       });
 
       await logAction(tab, 'target.clear', { targetId, selector: target.selector }, null, Boolean(cleared), cleared ? 'TARGET_CLEARED' : 'CLEAR_FAILED', evidence);
@@ -668,6 +809,7 @@ export const vlmPageApi = {
         targetId,
         target,
         cleared,
+        verification: actionVerification,
         evidence,
       };
     }
@@ -685,6 +827,10 @@ export const vlmPageApi = {
         selector: target.selector,
         keys,
       });
+      const actionVerification = await buildActionVerification(tab, before, {
+        beforeValue,
+        expectFocusSelector: focusSelector,
+      });
 
       const evidence = await collectActionEvidence(tab, before, {
         targetId,
@@ -693,6 +839,7 @@ export const vlmPageApi = {
         verification,
         keys,
         result,
+        actionVerification,
       });
 
       await logAction(tab, 'target.press', { targetId, selector: target.selector }, keys.join('+'), true, 'TARGET_PRESS_SENT', evidence);
@@ -703,6 +850,7 @@ export const vlmPageApi = {
         target,
         keys,
         result,
+        verification: actionVerification,
         evidence,
       };
     }
