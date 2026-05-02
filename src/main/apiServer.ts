@@ -8,6 +8,7 @@ import { exportFullProfileBackup, importFullProfileBackup } from './profileBacku
 import { profileStore } from './profileStore.js';
 import { memoryService } from '../server/memoryService.js';
 import { tabManager } from '../server/tabManager.js';
+import { listTargetMemory, siteHostFromUrl } from '../server/targetMemoryService.js';
 import { vlmPageApi } from '../server/vlmPageApi.js';
 
 function getTableColumns(tableName: string): string[] {
@@ -60,6 +61,16 @@ export function startApiServer(port: number = 3000): Promise<void> {
       res.json({
         activeProfileId: profileStore.getActiveId(),
       });
+    });
+
+    app.get('/api/memory/targets', (req, res) => {
+      try {
+        const profileId = resolveProfileId(req.query.profileId);
+        const host = typeof req.query.host === 'string' ? req.query.host : undefined;
+        res.json(listTargetMemory(profileId, host));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
     });
 
     app.put('/api/settings', (req, res) => {
@@ -424,6 +435,59 @@ export function startApiServer(port: number = 3000): Promise<void> {
     app.post('/api/tabs/:id/action/by-target', async (req, res) => {
       try {
         res.json(await vlmPageApi.actionByTarget(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/tabs/:id/memory/resolve-target', async (req, res) => {
+      try {
+        const tab = tabManager.getTab(req.params.id);
+        if (!tab) {
+          res.status(404).json({ error: 'TAB_NOT_FOUND' });
+          return;
+        }
+
+        const targetKey = typeof req.body?.targetKey === 'string' ? req.body.targetKey : '';
+        if (!targetKey) {
+          res.status(400).json({ error: 'TARGET_KEY_REQUIRED' });
+          return;
+        }
+
+        const host = siteHostFromUrl(tab.url || tab.webContents.getURL());
+        const memories = (listTargetMemory(tab.profileId, host) as any[]).filter((item: any) => item.target_key === targetKey);
+
+        for (const memory of memories) {
+          const result = await vlmPageApi.query(req.params.id, {
+            selector: memory.selector,
+            limit: 1,
+          });
+
+          const element = result.elements?.[0];
+          if (element?.visible && element?.interactable) {
+            res.json({
+              found: true,
+              targetKey,
+              memory,
+              target: {
+                targetKey,
+                selector: memory.selector,
+                kind: memory.kind,
+                label: memory.label,
+                visible: element.visible,
+                enabled: element.interactable,
+                bbox: element.bbox,
+              },
+            });
+            return;
+          }
+        }
+
+        res.json({
+          found: false,
+          targetKey,
+          reason: 'NO_MEMORY_TARGET_RESOLVED',
+        });
       } catch (error: any) {
         errorResponse(res, error);
       }

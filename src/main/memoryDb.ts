@@ -107,6 +107,25 @@ export function initDb() {
       snapshot_json TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS target_memory (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      site_host TEXT NOT NULL,
+      target_key TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      label TEXT,
+      selector TEXT NOT NULL,
+      actions_json TEXT,
+      success_count INTEGER DEFAULT 0,
+      failure_count INTEGER DEFAULT 0,
+      confidence REAL DEFAULT 0.5,
+      last_seen TEXT,
+      last_worked TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(profile_id, site_host, target_key, selector)
+    );
   `);
 
   const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map((column: any) => column.name);

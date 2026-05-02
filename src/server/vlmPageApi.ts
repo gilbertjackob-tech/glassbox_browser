@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../main/memoryDb.js';
 import { normalizeUrl } from '../lib/urlUtils.js';
 import { tabManager } from './tabManager.js';
+import { rememberSuccessfulTarget } from './targetMemoryService.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -658,6 +659,13 @@ export const vlmPageApi = {
         beforeValue,
         expectFocusSelector: focusSelector,
       });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
 
       const evidence = await collectActionEvidence(tab, before, {
         targetId,
@@ -676,6 +684,7 @@ export const vlmPageApi = {
         target,
         result,
         verification: actionVerification,
+        memoryRecord,
         evidence,
       };
     }
@@ -702,6 +711,13 @@ export const vlmPageApi = {
       const actionVerification = await buildActionVerification(tab, before, {
         beforeValue,
         expectFocusSelector: focusSelector,
+      });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
       });
 
       const evidence = await collectActionEvidence(tab, before, {
@@ -735,6 +751,7 @@ export const vlmPageApi = {
         afterValue,
         result,
         verification: actionVerification,
+        memoryRecord,
         evidence,
       };
     }
@@ -749,6 +766,13 @@ export const vlmPageApi = {
       const actionVerification = await buildActionVerification(tab, before, {
         beforeValue,
         expectFocusSelector: focusSelector,
+      });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
       });
 
       const evidence = await collectActionEvidence(tab, before, {
@@ -768,6 +792,7 @@ export const vlmPageApi = {
         target,
         focused,
         verification: actionVerification,
+        memoryRecord,
         evidence,
       };
     }
@@ -792,6 +817,13 @@ export const vlmPageApi = {
         beforeValue,
         expectFocusSelector: focusSelector,
       });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
 
       const evidence = await collectActionEvidence(tab, before, {
         targetId,
@@ -810,6 +842,7 @@ export const vlmPageApi = {
         target,
         cleared,
         verification: actionVerification,
+        memoryRecord,
         evidence,
       };
     }
@@ -831,6 +864,13 @@ export const vlmPageApi = {
         beforeValue,
         expectFocusSelector: focusSelector,
       });
+      const memoryRecord = rememberSuccessfulTarget({
+        profileId: tab.profileId,
+        url: tab.webContents.getURL(),
+        action,
+        target,
+        verification: actionVerification,
+      });
 
       const evidence = await collectActionEvidence(tab, before, {
         targetId,
@@ -851,6 +891,7 @@ export const vlmPageApi = {
         keys,
         result,
         verification: actionVerification,
+        memoryRecord,
         evidence,
       };
     }
