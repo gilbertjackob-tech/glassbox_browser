@@ -435,6 +435,42 @@ async function resolveMemorySelectorOnPage(tab: TabMetadata, selector: string) {
   }, [selector]);
 }
 
+function checkExpectedVerification(result: any, expected: any = {}) {
+  const verification = result?.verification || {};
+  const failures: string[] = [];
+
+  function checkBool(key: string) {
+    if (typeof expected[key] === 'boolean' && verification[key] !== expected[key]) {
+      failures.push(`${key}_EXPECTED_${expected[key]}_GOT_${verification[key]}`);
+    }
+  }
+
+  checkBool('urlChanged');
+  checkBool('domChanged');
+  checkBool('valueChanged');
+  checkBool('focusConfirmed');
+  checkBool('loadingStable');
+
+  if (typeof expected.urlIncludes === 'string' && expected.urlIncludes) {
+    const actualUrl = String(result?.evidence?.afterUrl || result?.afterUrl || '');
+    if (!actualUrl.includes(expected.urlIncludes)) {
+      failures.push(`URL_DOES_NOT_INCLUDE_${expected.urlIncludes}`);
+    }
+  }
+
+  if (typeof expected.titleIncludes === 'string' && expected.titleIncludes) {
+    const actualTitle = String(result?.state?.title || result?.title || '');
+    if (!actualTitle.toLowerCase().includes(expected.titleIncludes.toLowerCase())) {
+      failures.push(`TITLE_DOES_NOT_INCLUDE_${expected.titleIncludes}`);
+    }
+  }
+
+  return {
+    ok: failures.length === 0,
+    failures,
+  };
+}
+
 export const vlmPageApi = {
   async getState(tabId: string) {
     const tab = getTabOrThrow(tabId);
@@ -1402,6 +1438,156 @@ export const vlmPageApi = {
     }
 
     throw new Error('UNREACHABLE_ACTION');
+  },
+
+  async runActionChain(tabId: string, body: any) {
+    getTabOrThrow(tabId);
+
+    const steps = Array.isArray(body?.steps) ? body.steps : [];
+    const stopOnFailure = body?.stopOnFailure !== false;
+    const maxSteps = Math.max(1, Math.min(Number(body?.maxSteps) || 10, 10));
+
+    if (steps.length === 0) {
+      throw new Error('CHAIN_STEPS_REQUIRED');
+    }
+    if (steps.length > maxSteps) {
+      throw new Error('CHAIN_TOO_LONG');
+    }
+
+    const allowedActions = new Set(['click', 'type', 'focus', 'clear', 'press']);
+    const results: any[] = [];
+    const chainStartedAt = Date.now();
+
+    for (let index = 0; index < steps.length; index += 1) {
+      const step = steps[index] || {};
+      const name = typeof step.name === 'string' ? step.name : `step_${index + 1}`;
+      const targetKey = typeof step.targetKey === 'string' ? step.targetKey : '';
+      const action = typeof step.action === 'string' ? step.action : '';
+
+      if (!targetKey) {
+        const failed = { index, name, ok: false, reason: 'TARGET_KEY_REQUIRED' };
+        results.push(failed);
+        return {
+          ok: false,
+          tabId,
+          stepCount: steps.length,
+          completedCount: results.filter((item) => item.ok).length,
+          failedAt: index,
+          reason: 'TARGET_KEY_REQUIRED',
+          results,
+        };
+      }
+
+      if (!action || !allowedActions.has(action)) {
+        const failed = {
+          index,
+          name,
+          targetKey,
+          ok: false,
+          reason: 'UNSUPPORTED_CHAIN_ACTION',
+          action,
+        };
+        results.push(failed);
+        return {
+          ok: false,
+          tabId,
+          stepCount: steps.length,
+          completedCount: results.filter((item) => item.ok).length,
+          failedAt: index,
+          reason: 'UNSUPPORTED_CHAIN_ACTION',
+          results,
+        };
+      }
+
+      const startedAt = Date.now();
+      let actionResult: any;
+
+      try {
+        actionResult = await this.actionResolveAndAct(tabId, {
+          targetKey,
+          kind: typeof step.kind === 'string' ? step.kind : undefined,
+          action,
+          text: typeof step.text === 'string' ? step.text : undefined,
+          key: typeof step.key === 'string' ? step.key : undefined,
+          keys: Array.isArray(step.keys) ? step.keys : undefined,
+          clearFirst: Boolean(step.clearFirst),
+          targetType: step.targetType,
+        });
+      } catch (error: any) {
+        const failed = {
+          index,
+          name,
+          targetKey,
+          action,
+          ok: false,
+          reason: error?.message || String(error),
+          elapsedMs: Date.now() - startedAt,
+        };
+        results.push(failed);
+        return {
+          ok: false,
+          tabId,
+          stepCount: steps.length,
+          completedCount: results.filter((item) => item.ok).length,
+          failedAt: index,
+          reason: failed.reason,
+          results,
+          elapsedMs: Date.now() - chainStartedAt,
+        };
+      }
+
+      const expectedCheck = checkExpectedVerification(actionResult, step.verify || {});
+      const stepOk = Boolean(actionResult?.ok) && expectedCheck.ok;
+
+      const stepResult = {
+        index,
+        name,
+        targetKey,
+        action,
+        ok: stepOk,
+        source: actionResult?.source || actionResult?.resolve?.source || null,
+        reason: stepOk ? 'OK' : (actionResult?.reason || 'VERIFY_FAILED'),
+        verificationFailures: expectedCheck.failures,
+        verification: actionResult?.verification || null,
+        resolve: actionResult?.resolve || null,
+        target: actionResult?.target
+          ? {
+              targetId: actionResult.target.targetId,
+              kind: actionResult.target.kind,
+              label: actionResult.target.label,
+              selector: actionResult.target.selector,
+              bbox: actionResult.target.bbox,
+            }
+          : null,
+        elapsedMs: Date.now() - startedAt,
+      };
+
+      results.push(stepResult);
+
+      if (!stepOk && stopOnFailure) {
+        return {
+          ok: false,
+          tabId,
+          stepCount: steps.length,
+          completedCount: results.filter((item) => item.ok).length,
+          failedAt: index,
+          reason: stepResult.reason,
+          results,
+          elapsedMs: Date.now() - chainStartedAt,
+        };
+      }
+    }
+
+    const ok = results.every((item) => item.ok);
+    return {
+      ok,
+      tabId,
+      stepCount: steps.length,
+      completedCount: results.filter((item) => item.ok).length,
+      failedAt: ok ? null : results.findIndex((item) => !item.ok),
+      results,
+      elapsedMs: Date.now() - chainStartedAt,
+    };
   },
 
   async screenshot(tabId: string, options: { selector?: string; highlight?: boolean }) {

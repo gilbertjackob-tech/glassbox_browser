@@ -456,6 +456,14 @@ export function startApiServer(port: number = 3000): Promise<void> {
       }
     });
 
+    app.post('/api/tabs/:id/action/run-chain', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.runActionChain(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
     app.post('/api/tabs/:id/memory/resolve-target', async (req, res) => {
       try {
         const tab = tabManager.getTab(req.params.id);
