@@ -432,6 +432,14 @@ export function startApiServer(port: number = 3000): Promise<void> {
       }
     });
 
+    app.post('/api/tabs/:id/resolve-target', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.resolveTarget(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
     app.post('/api/tabs/:id/action/by-target', async (req, res) => {
       try {
         res.json(await vlmPageApi.actionByTarget(req.params.id, req.body || {}));

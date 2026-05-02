@@ -4,7 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../main/memoryDb.js';
 import { normalizeUrl } from '../lib/urlUtils.js';
 import { tabManager } from './tabManager.js';
-import { rememberSuccessfulTarget } from './targetMemoryService.js';
+import {
+  canonicalTargetKey,
+  listTargetMemory,
+  markTargetMemoryFailure,
+  rememberSuccessfulTarget,
+  targetMatchesKey,
+} from './targetMemoryService.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -345,10 +351,204 @@ async function buildActionVerification(
   };
 }
 
+async function resolveMemorySelectorOnPage(tab: TabMetadata, selector: string) {
+  return await runInPage(tab, (targetSelector: string) => {
+    let el: HTMLElement | null = null;
+
+    try {
+      el = document.querySelector(targetSelector) as HTMLElement | null;
+    } catch {
+      return {
+        found: false,
+        reason: 'INVALID_SELECTOR',
+      };
+    }
+
+    if (!el) {
+      return {
+        found: false,
+        reason: 'ELEMENT_NOT_FOUND',
+      };
+    }
+
+    const rect = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+
+    const visible =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom >= 0 &&
+      rect.right >= 0 &&
+      rect.top <= window.innerHeight &&
+      rect.left <= window.innerWidth &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.opacity !== '0' &&
+      !el.hidden;
+
+    const enabled =
+      !(el as any).disabled &&
+      !(el as any).readOnly &&
+      style.pointerEvents !== 'none' &&
+      el.getAttribute('aria-disabled') !== 'true';
+
+    const label =
+      el.getAttribute('aria-label') ||
+      el.getAttribute('placeholder') ||
+      el.getAttribute('title') ||
+      (el.innerText || el.textContent || '').trim();
+
+    const tag = el.tagName.toLowerCase();
+    const role = (el.getAttribute('role') || '').toLowerCase();
+    const type = ((el as HTMLInputElement).type || '').toLowerCase();
+
+    let kind = 'card';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || role === 'textbox' || role === 'searchbox') {
+      kind = 'input';
+    } else if (tag === 'button' || role === 'button' || type === 'button' || type === 'submit') {
+      kind = 'button';
+    } else if (tag === 'a' || role === 'link') {
+      kind = 'link';
+    }
+
+    const actions = !enabled ? [] : kind === 'input' ? ['focus', 'type', 'clear'] : ['click'];
+
+    return {
+      found: visible && enabled,
+      reason: !visible ? 'ELEMENT_NOT_VISIBLE' : !enabled ? 'ELEMENT_DISABLED' : 'OK',
+      target: {
+        kind,
+        label: String(label || '').slice(0, 240),
+        selector: targetSelector,
+        bbox: {
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        },
+        visible,
+        enabled,
+        actions,
+        text: (el.innerText || el.textContent || '').trim().slice(0, 300),
+      },
+    };
+  }, [selector]);
+}
+
 export const vlmPageApi = {
   async getState(tabId: string) {
     const tab = getTabOrThrow(tabId);
     return await getPageStateSnapshot(tab);
+  },
+
+  async resolveTarget(tabId: string, body: any) {
+    const tab = getTabOrThrow(tabId);
+
+    const rawTargetKey =
+      typeof body?.targetKey === 'string'
+        ? body.targetKey
+        : typeof body?.query === 'string'
+          ? body.query
+          : typeof body?.description === 'string'
+            ? body.description
+            : '';
+
+    if (!rawTargetKey) {
+      throw new Error('TARGET_KEY_REQUIRED');
+    }
+
+    const targetKey = canonicalTargetKey(rawTargetKey);
+    const requestedKind = typeof body?.kind === 'string' ? body.kind.toLowerCase() : undefined;
+    const host = (() => {
+      try {
+        return new URL(tab.webContents.getURL()).hostname.toLowerCase().replace(/^www\./, '');
+      } catch {
+        return 'unknown';
+      }
+    })();
+
+    const attempts: any[] = [];
+
+    const memoryCandidates = (listTargetMemory(tab.profileId, host) as any[])
+      .filter((memory) => memory.target_key === targetKey)
+      .sort((a, b) => {
+        const confidenceDelta = Number(b.confidence || 0) - Number(a.confidence || 0);
+        if (confidenceDelta !== 0) return confidenceDelta;
+        return Number(b.success_count || 0) - Number(a.success_count || 0);
+      });
+
+    for (const memory of memoryCandidates) {
+      const resolved = await resolveMemorySelectorOnPage(tab, memory.selector);
+
+      attempts.push({
+        source: 'memory',
+        selector: memory.selector,
+        targetKey: memory.target_key,
+        found: resolved.found,
+        reason: resolved.reason,
+        confidence: memory.confidence,
+      });
+
+      if (resolved.found && resolved.target) {
+        if (requestedKind && resolved.target.kind !== requestedKind) {
+          continue;
+        }
+
+        return {
+          found: true,
+          source: 'memory',
+          targetKey,
+          host,
+          target: {
+            targetId: `memory_${targetKey}`,
+            ...resolved.target,
+          },
+          memory: {
+            id: memory.id,
+            confidence: memory.confidence,
+            success_count: memory.success_count,
+            failure_count: memory.failure_count,
+            last_worked: memory.last_worked,
+          },
+          attempts,
+        };
+      }
+
+      if (resolved.reason === 'ELEMENT_NOT_FOUND' || resolved.reason === 'ELEMENT_NOT_VISIBLE' || resolved.reason === 'ELEMENT_DISABLED') {
+        markTargetMemoryFailure(memory.id);
+      }
+    }
+
+    const snapshot = await this.actionTargets(tabId);
+    const targets = Array.isArray(snapshot.targets) ? snapshot.targets : [];
+
+    const match = targets.find((target) =>
+      target.visible &&
+      target.enabled &&
+      targetMatchesKey(target, targetKey, requestedKind)
+    );
+
+    if (match) {
+      return {
+        found: true,
+        source: 'scan',
+        targetKey,
+        host,
+        target: match,
+        stateHash: snapshot.stateHash,
+        fallbackReason: memoryCandidates.length > 0 ? 'MEMORY_NOT_RESOLVED' : 'NO_MEMORY_FOR_TARGET_KEY',
+        attempts,
+      };
+    }
+
+    return {
+      found: false,
+      targetKey,
+      host,
+      reason: 'TARGET_NOT_FOUND',
+      attempts,
+      scannedTargetCount: targets.length,
+    };
   },
 
   async getHtml(tabId: string) {

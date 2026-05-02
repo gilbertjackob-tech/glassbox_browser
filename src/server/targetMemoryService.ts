@@ -28,6 +28,39 @@ export function siteHostFromUrl(url: string) {
   }
 }
 
+export function normalizeTargetKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+}
+
+const TARGET_KEY_ALIASES: Record<string, string> = {
+  search: 'search_box',
+  search_input: 'search_box',
+  search_field: 'search_box',
+  searchbox: 'search_box',
+  query_box: 'search_box',
+  search_btn: 'search_button',
+  search_submit: 'search_button',
+  login_button: 'sign_in_button',
+  signin_button: 'sign_in_button',
+  sign_in: 'sign_in_button',
+  email_field: 'username_or_email_field',
+  username_field: 'username_or_email_field',
+  user_field: 'username_or_email_field',
+  pass_field: 'password_field',
+  password_input: 'password_field',
+  compose: 'compose_button',
+  send: 'send_button',
+};
+
+export function canonicalTargetKey(value: string) {
+  const normalized = normalizeTargetKey(value);
+  return TARGET_KEY_ALIASES[normalized] || normalized;
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -78,6 +111,54 @@ export function inferTargetKey(target: {
 
   const base = slugify(label || selector || kind || 'target');
   return `${kind || 'target'}_${base || 'unknown'}`;
+}
+
+export function targetMatchesKey(target: {
+  kind?: string;
+  label?: string;
+  selector?: string;
+  text?: string;
+}, targetKey: string, kind?: string) {
+  const canonical = canonicalTargetKey(targetKey);
+  const inferred = inferTargetKey(target);
+  const targetKind = String(target.kind || '').toLowerCase();
+  const requestedKind = String(kind || '').toLowerCase();
+
+  if (requestedKind && targetKind !== requestedKind) {
+    return false;
+  }
+
+  if (inferred === canonical) {
+    return true;
+  }
+
+  const label = String(target.label || target.text || '').toLowerCase();
+  const selector = String(target.selector || '').toLowerCase();
+  const haystack = `${label} ${selector}`;
+
+  if (canonical === 'search_box') {
+    return targetKind === 'input' && /search|query|search_query|name="q"|name='q'/.test(haystack);
+  }
+  if (canonical === 'search_button') {
+    return targetKind === 'button' && /search/.test(haystack);
+  }
+  if (canonical === 'sign_in_button') {
+    return /sign in|signin|log in|login/.test(haystack);
+  }
+  if (canonical === 'username_or_email_field') {
+    return targetKind === 'input' && /email|username|user/.test(haystack);
+  }
+  if (canonical === 'password_field') {
+    return targetKind === 'input' && /password/.test(haystack);
+  }
+  if (canonical === 'compose_button') {
+    return targetKind === 'button' && /compose/.test(haystack);
+  }
+  if (canonical === 'send_button') {
+    return targetKind === 'button' && /send/.test(haystack);
+  }
+
+  return haystack.includes(canonical.replace(/_/g, ' ')) || haystack.includes(canonical);
 }
 
 export function shouldRememberAction(action: string, verification: any) {
