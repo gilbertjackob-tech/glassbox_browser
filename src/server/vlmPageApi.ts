@@ -11,6 +11,7 @@ import {
   rememberSuccessfulTarget,
   targetMatchesKey,
 } from './targetMemoryService.js';
+import { resolveFromStarterPack } from './sitePackResolver.js';
 import {
   getMicroSkill,
   markMicroSkillResult,
@@ -560,6 +561,37 @@ export const vlmPageApi = {
       if (resolved.reason === 'ELEMENT_NOT_FOUND' || resolved.reason === 'ELEMENT_NOT_VISIBLE' || resolved.reason === 'ELEMENT_DISABLED') {
         markTargetMemoryFailure(memory.id);
       }
+    }
+
+    const starterPackResult = await resolveFromStarterPack({
+      tabUrl: tab.webContents.getURL(),
+      targetKey,
+      kind: requestedKind,
+      runQuery: async (selector: string) => {
+        return await this.query(tabId, {
+          selector,
+          limit: 1,
+        });
+      },
+    });
+
+    attempts.push({
+      source: 'starter_pack',
+      found: starterPackResult.found,
+      reason: starterPackResult.reason,
+      host: (starterPackResult as any).host,
+    });
+
+    if (starterPackResult.found) {
+      return {
+        found: true,
+        source: 'starter_pack',
+        targetKey,
+        host,
+        target: starterPackResult.target,
+        starterTarget: (starterPackResult as any).starterTarget,
+        attempts,
+      };
     }
 
     const snapshot = await this.actionTargets(tabId);

@@ -7,6 +7,7 @@ import db from './memoryDb.js';
 import { exportFullProfileBackup, importFullProfileBackup } from './profileBackupService.js';
 import { profileStore } from './profileStore.js';
 import { memoryService } from '../server/memoryService.js';
+import { getSitePackForHost, listSitePacks } from '../server/sitePacks/index.js';
 import { listMicroSkills, saveMicroSkill } from '../server/skillService.js';
 import { tabManager } from '../server/tabManager.js';
 import { listTargetMemory, siteHostFromUrl } from '../server/targetMemoryService.js';
@@ -96,6 +97,58 @@ export function startApiServer(port: number = 3000): Promise<void> {
         res.json({
           ok: true,
           skill,
+        });
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.get('/api/site-packs', (_req, res) => {
+      try {
+        res.json(listSitePacks());
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.get('/api/site-packs/:host', (req, res) => {
+      try {
+        const pack = getSitePackForHost(req.params.host);
+        if (!pack) {
+          res.status(404).json({ error: 'SITE_PACK_NOT_FOUND' });
+          return;
+        }
+
+        res.json(pack);
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/site-packs/:host/install-skills', (req, res) => {
+      try {
+        const profileId = resolveProfileId(req.body?.profileId);
+        const pack = getSitePackForHost(req.params.host);
+
+        if (!pack) {
+          res.status(404).json({ error: 'SITE_PACK_NOT_FOUND' });
+          return;
+        }
+
+        const installed = (pack.microSkills || []).map((skill) =>
+          saveMicroSkill({
+            profileId,
+            name: skill.name,
+            queryPattern: skill.queryPattern,
+            steps: skill.steps,
+          })
+        );
+
+        res.json({
+          ok: true,
+          host: pack.host,
+          installedCount: installed.length,
+          installed,
         });
       } catch (error: any) {
         errorResponse(res, error);
