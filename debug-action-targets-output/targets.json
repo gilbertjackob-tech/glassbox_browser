@@ -1,0 +1,2892 @@
+{
+  "runAt": "2026-05-02T07:35:56.553Z",
+  "tabId": "e4f73185-0133-4797-9d45-ed802f0fd43c",
+  "sites": [
+    {
+      "site": "YouTube",
+      "url": "https://www.youtube.com/results?search_query=lecture",
+      "title": "lecture - YouTube",
+      "stateHash": "6f2cc32c00f9542cb2dd0fad55e336a3b83505acaa9a3672f810d06cff26b237",
+      "targetCount": 38,
+      "checks": {
+        "searchInput": true,
+        "searchButton": true
+      },
+      "passed": true,
+      "targets": [
+        {
+          "targetId": "t_1",
+          "kind": "button",
+          "label": "Guide",
+          "selector": "#button",
+          "bbox": {
+            "x": 24,
+            "y": 16,
+            "width": 24,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_2",
+          "kind": "link",
+          "label": "YouTube Home",
+          "selector": "#logo",
+          "bbox": {
+            "x": 56,
+            "y": 0,
+            "width": 123,
+            "height": 56
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_3",
+          "kind": "input",
+          "label": "Search",
+          "selector": "input[name=\"search_query\"]",
+          "bbox": {
+            "x": 332,
+            "y": 16,
+            "width": 491,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "focus",
+            "type",
+            "clear"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_4",
+          "kind": "button",
+          "label": "Clear search query",
+          "selector": "button[aria-label=\"Clear search query\"]",
+          "bbox": {
+            "x": 815,
+            "y": 8,
+            "width": 40,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_5",
+          "kind": "button",
+          "label": "Search",
+          "selector": "button[aria-label=\"Search\"]",
+          "bbox": {
+            "x": 851,
+            "y": 8,
+            "width": 64,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_6",
+          "kind": "button",
+          "label": "Search with your voice",
+          "selector": "button[aria-label=\"Search with your voice\"]",
+          "bbox": {
+            "x": 931,
+            "y": 8,
+            "width": 40,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_7",
+          "kind": "button",
+          "label": "All",
+          "selector": "button[role=\"tab\"]",
+          "bbox": {
+            "x": 96,
+            "y": 67,
+            "width": 40,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "All"
+        },
+        {
+          "targetId": "t_8",
+          "kind": "button",
+          "label": "Shorts",
+          "selector": "button[role=\"tab\"]",
+          "bbox": {
+            "x": 144,
+            "y": 67,
+            "width": 65,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Shorts"
+        },
+        {
+          "targetId": "t_9",
+          "kind": "button",
+          "label": "Unwatched",
+          "selector": "button[role=\"tab\"]",
+          "bbox": {
+            "x": 218,
+            "y": 67,
+            "width": 94,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Unwatched"
+        },
+        {
+          "targetId": "t_10",
+          "kind": "button",
+          "label": "Watched",
+          "selector": "button[role=\"tab\"]",
+          "bbox": {
+            "x": 320,
+            "y": 67,
+            "width": 79,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Watched"
+        },
+        {
+          "targetId": "t_11",
+          "kind": "button",
+          "label": "Videos",
+          "selector": "button[role=\"tab\"]",
+          "bbox": {
+            "x": 407,
+            "y": 67,
+            "width": 67,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Videos"
+        },
+        {
+          "targetId": "t_12",
+          "kind": "button",
+          "label": "Recently uploaded",
+          "selector": "button[role=\"tab\"]",
+          "bbox": {
+            "x": 482,
+            "y": 67,
+            "width": 139,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Recently uploaded"
+        },
+        {
+          "targetId": "t_13",
+          "kind": "button",
+          "label": "Live",
+          "selector": "button[role=\"tab\"]",
+          "bbox": {
+            "x": 629,
+            "y": 67,
+            "width": 49,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Live"
+        },
+        {
+          "targetId": "t_14",
+          "kind": "button",
+          "label": "Search filters",
+          "selector": "button[aria-label=\"Search filters\"]",
+          "bbox": {
+            "x": 1147,
+            "y": 66,
+            "width": 95,
+            "height": 36
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Filters"
+        },
+        {
+          "targetId": "t_15",
+          "kind": "link",
+          "label": "56:15\nNow playing",
+          "selector": "#thumbnail",
+          "bbox": {
+            "x": 96,
+            "y": 112,
+            "width": 500,
+            "height": 281
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "56:15\nNow playing"
+        },
+        {
+          "targetId": "t_16",
+          "kind": "card",
+          "label": "56 minutes, 15 seconds",
+          "selector": "badge-shape[aria-label=\"56 minutes, 15 seconds\"]",
+          "bbox": {
+            "x": 550,
+            "y": 365,
+            "width": 38,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "56:15"
+        },
+        {
+          "targetId": "t_17",
+          "kind": "link",
+          "label": "Lecture 1: Introduction to Power and Politics in Today’s World 56 minutes",
+          "selector": "#video-title",
+          "bbox": {
+            "x": 612,
+            "y": 112,
+            "width": 488,
+            "height": 26
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Lecture 1: Introduction to Power and Politics in Today’s World"
+        },
+        {
+          "targetId": "t_18",
+          "kind": "card",
+          "label": "Lecture 1: Introduction to Power and Politics in Today’s World 56 minutes",
+          "selector": "yt-formatted-string[aria-label=\"Lecture 1: Introduction to Power and Politics in Today’s World 56 minutes\"]",
+          "bbox": {
+            "x": 612,
+            "y": 114,
+            "width": 488,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Lecture 1: Introduction to Power and Politics in Today’s World"
+        },
+        {
+          "targetId": "t_19",
+          "kind": "button",
+          "label": "Action menu",
+          "selector": "#button",
+          "bbox": {
+            "x": 1202,
+            "y": 101,
+            "width": 40,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_20",
+          "kind": "link",
+          "label": "Go to channel YaleCourses",
+          "selector": "#channel-thumbnail",
+          "bbox": {
+            "x": 612,
+            "y": 168,
+            "width": 32,
+            "height": 27
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_21",
+          "kind": "card",
+          "label": "YaleCourses",
+          "selector": "#text",
+          "bbox": {
+            "x": 644,
+            "y": 174,
+            "width": 67,
+            "height": 15
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "YaleCourses"
+        },
+        {
+          "targetId": "t_22",
+          "kind": "link",
+          "label": "YaleCourses",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 644,
+            "y": 172,
+            "width": 67,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "YaleCourses"
+        },
+        {
+          "targetId": "t_23",
+          "kind": "card",
+          "label": "Closed captions",
+          "selector": "badge-shape[aria-label=\"Closed captions\"]",
+          "bbox": {
+            "x": 612,
+            "y": 233,
+            "width": 24,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "CC"
+        },
+        {
+          "targetId": "t_24",
+          "kind": "button",
+          "label": "Introduction | The Berlin Wall | Bundestag | Alternative for Deutschland | Angela Merkel | Christian Democratic Union | The Approach | Political Theory | Course Structure | New Global Order | End of History | New Politics of Insecurity | Wh",
+          "selector": "#collapsed-title",
+          "bbox": {
+            "x": 754,
+            "y": 280,
+            "width": 444,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Introduction | The Berlin Wall | Bundestag | Alternative for Deutschland | Angela Merkel | Christian Democratic Union | The Approach | Political Theory | Course Structure | New Global Order | End of History | New Politics of Insecurity | What is to be done | Logistical matters | Access to reading | "
+        },
+        {
+          "targetId": "t_25",
+          "kind": "button",
+          "label": "More",
+          "selector": "button[aria-label=\"More\"]",
+          "bbox": {
+            "x": 1198,
+            "y": 269,
+            "width": 40,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_26",
+          "kind": "link",
+          "label": "link:a",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 96,
+            "y": 409,
+            "width": 500,
+            "height": 136
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_27",
+          "kind": "link",
+          "label": "The Lecture Hall\n@The_LectureHall•72.1K subscribers\nThis channel brings the ideas and lectures of Professor Jiang Xueqin to a wider audience — exploring geopolitics, history, power, ...",
+          "selector": "#main-link",
+          "bbox": {
+            "x": 612,
+            "y": 409,
+            "width": 535,
+            "height": 136
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "The Lecture Hall\n@The_LectureHall•72.1K subscribers\nThis channel brings the ideas and lectures of Professor Jiang Xueqin to a wider audience — exploring geopolitics, history, power, ..."
+        },
+        {
+          "targetId": "t_28",
+          "kind": "card",
+          "label": "The Lecture Hall",
+          "selector": "#text",
+          "bbox": {
+            "x": 612,
+            "y": 423,
+            "width": 130,
+            "height": 26
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "The Lecture Hall"
+        },
+        {
+          "targetId": "t_29",
+          "kind": "link",
+          "label": "Subscribe",
+          "selector": "a[aria-label=\"Subscribe\"]",
+          "bbox": {
+            "x": 1147,
+            "y": 451,
+            "width": 95,
+            "height": 36
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Subscribe"
+        },
+        {
+          "targetId": "t_30",
+          "kind": "link",
+          "label": "link:a",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 96,
+            "y": 561,
+            "width": 516,
+            "height": 150
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_31",
+          "kind": "link",
+          "label": "Watch Thoughts Disappear When You Type vs. Wispr Flow.",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 612,
+            "y": 563,
+            "width": 467,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Watch Thoughts Disappear When You Type vs. Wispr Flow."
+        },
+        {
+          "targetId": "t_32",
+          "kind": "link",
+          "label": "Watch Thoughts Disappear When You Type vs. Wispr Flow.",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 612,
+            "y": 563,
+            "width": 467,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Watch Thoughts Disappear When You Type vs. Wispr Flow."
+        },
+        {
+          "targetId": "t_33",
+          "kind": "link",
+          "label": "Don't let ideas get lost to the void. Speak, capture, and format instantly.",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 612,
+            "y": 592,
+            "width": 376,
+            "height": 15
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Don't let ideas get lost to the void. Speak, capture, and format instantly."
+        },
+        {
+          "targetId": "t_34",
+          "kind": "link",
+          "label": "Don't let ideas get lost to the void. Speak, capture, and format instantly.",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 612,
+            "y": 592,
+            "width": 376,
+            "height": 15
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Don't let ideas get lost to the void. Speak, capture, and format instantly."
+        },
+        {
+          "targetId": "t_35",
+          "kind": "button",
+          "label": "Wispr Flow AI",
+          "selector": "div[aria-label=\"Wispr Flow AI\"]",
+          "bbox": {
+            "x": 612,
+            "y": 617,
+            "width": 24,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_36",
+          "kind": "button",
+          "label": "My Ad Center",
+          "selector": "button[aria-label=\"My Ad Center\"]",
+          "bbox": {
+            "x": 1216,
+            "y": 555,
+            "width": 36,
+            "height": 36
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_37",
+          "kind": "link",
+          "label": "Watch",
+          "selector": "a[aria-label=\"Watch\"]",
+          "bbox": {
+            "x": 612,
+            "y": 653,
+            "width": 152,
+            "height": 36
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Watch"
+        },
+        {
+          "targetId": "t_38",
+          "kind": "link",
+          "label": "Visit site",
+          "selector": "a[aria-label=\"Visit site\"]",
+          "bbox": {
+            "x": 776,
+            "y": 653,
+            "width": 152,
+            "height": 36
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Visit site"
+        }
+      ]
+    },
+    {
+      "site": "Google",
+      "url": "https://www.google.com/search?q=lecture",
+      "title": "lecture - Google Search",
+      "stateHash": "29feffaa46863c7562c2679d517dea730dcc8422ccbe62fd9a8129733710e276",
+      "targetCount": 45,
+      "checks": {
+        "searchBox": true
+      },
+      "passed": true,
+      "targets": [
+        {
+          "targetId": "t_1",
+          "kind": "link",
+          "label": "Skip to main content",
+          "selector": "a[role=\"link\"]",
+          "bbox": {
+            "x": 11,
+            "y": 58,
+            "width": 110,
+            "height": 44
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Skip to main content"
+        },
+        {
+          "targetId": "t_2",
+          "kind": "link",
+          "label": "Accessibility help",
+          "selector": "a:nth-of-type(2)",
+          "bbox": {
+            "x": 11,
+            "y": 58,
+            "width": 110,
+            "height": 44
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Accessibility help"
+        },
+        {
+          "targetId": "t_3",
+          "kind": "link",
+          "label": "Accessibility feedback",
+          "selector": "a[role=\"link\"]",
+          "bbox": {
+            "x": 11,
+            "y": 86,
+            "width": 110,
+            "height": 44
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Accessibility feedback"
+        },
+        {
+          "targetId": "t_4",
+          "kind": "link",
+          "label": "Go to Google Home",
+          "selector": "#logo",
+          "bbox": {
+            "x": 83,
+            "y": 36,
+            "width": 92,
+            "height": 33
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_5",
+          "kind": "input",
+          "label": "Search",
+          "selector": "#APjFqb",
+          "bbox": {
+            "x": 240,
+            "y": 27,
+            "width": 523,
+            "height": 50
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "focus",
+            "type",
+            "clear"
+          ],
+          "text": "lecture"
+        },
+        {
+          "targetId": "t_6",
+          "kind": "button",
+          "label": "Clear",
+          "selector": "div[aria-label=\"Clear\"]",
+          "bbox": {
+            "x": 763,
+            "y": 27,
+            "width": 48,
+            "height": 50
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_7",
+          "kind": "button",
+          "label": "Search by voice",
+          "selector": "div[aria-label=\"Search by voice\"]",
+          "bbox": {
+            "x": 815,
+            "y": 40,
+            "width": 40,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_8",
+          "kind": "button",
+          "label": "Search by image",
+          "selector": "div[aria-label=\"Search by image\"]",
+          "bbox": {
+            "x": 855,
+            "y": 40,
+            "width": 40,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_9",
+          "kind": "button",
+          "label": "Search",
+          "selector": "button[aria-label=\"Search\"]",
+          "bbox": {
+            "x": 899,
+            "y": 27,
+            "width": 44,
+            "height": 50
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_10",
+          "kind": "button",
+          "label": "Search Labs",
+          "selector": "a[aria-label=\"Search Labs\"]",
+          "bbox": {
+            "x": 1110,
+            "y": 32,
+            "width": 40,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_11",
+          "kind": "button",
+          "label": "Google apps",
+          "selector": "a[aria-label=\"Google apps\"]",
+          "bbox": {
+            "x": 1158,
+            "y": 32,
+            "width": 40,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_12",
+          "kind": "button",
+          "label": "Google Account: gilbert.jackob Jackob  \n(gilbert.jackob3@gmail.com)",
+          "selector": "a[aria-label=\"Google Account: gilbert.jackob Jackob  \n(gilbert.jackob3@gmail.com)\"]",
+          "bbox": {
+            "x": 1206,
+            "y": 32,
+            "width": 40,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_13",
+          "kind": "card",
+          "label": "AI Mode",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 71,
+            "y": 88,
+            "width": 78,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "AI Mode"
+        },
+        {
+          "targetId": "t_14",
+          "kind": "link",
+          "label": "AI Mode",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 71,
+            "y": 88,
+            "width": 78,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "AI Mode"
+        },
+        {
+          "targetId": "t_15",
+          "kind": "card",
+          "label": "All",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 149,
+            "y": 88,
+            "width": 40,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "All"
+        },
+        {
+          "targetId": "t_16",
+          "kind": "link",
+          "label": "All",
+          "selector": "a[role=\"link\"]",
+          "bbox": {
+            "x": 149,
+            "y": 88,
+            "width": 40,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": false,
+          "actions": [],
+          "text": "All"
+        },
+        {
+          "targetId": "t_17",
+          "kind": "card",
+          "label": "Images",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 189,
+            "y": 88,
+            "width": 71,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Images"
+        },
+        {
+          "targetId": "t_18",
+          "kind": "link",
+          "label": "Images",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 189,
+            "y": 88,
+            "width": 71,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Images"
+        },
+        {
+          "targetId": "t_19",
+          "kind": "card",
+          "label": "Videos",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 261,
+            "y": 88,
+            "width": 68,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Videos"
+        },
+        {
+          "targetId": "t_20",
+          "kind": "link",
+          "label": "Videos",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 261,
+            "y": 88,
+            "width": 68,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Videos"
+        },
+        {
+          "targetId": "t_21",
+          "kind": "card",
+          "label": "Short videos",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 329,
+            "y": 88,
+            "width": 106,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Short videos"
+        },
+        {
+          "targetId": "t_22",
+          "kind": "link",
+          "label": "Short videos",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 329,
+            "y": 88,
+            "width": 106,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Short videos"
+        },
+        {
+          "targetId": "t_23",
+          "kind": "card",
+          "label": "Forums",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 435,
+            "y": 88,
+            "width": 73,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Forums"
+        },
+        {
+          "targetId": "t_24",
+          "kind": "link",
+          "label": "Forums",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 435,
+            "y": 88,
+            "width": 73,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Forums"
+        },
+        {
+          "targetId": "t_25",
+          "kind": "card",
+          "label": "News",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 508,
+            "y": 88,
+            "width": 60,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "News"
+        },
+        {
+          "targetId": "t_26",
+          "kind": "link",
+          "label": "News",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 508,
+            "y": 88,
+            "width": 60,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "News"
+        },
+        {
+          "targetId": "t_27",
+          "kind": "card",
+          "label": "More",
+          "selector": "div[role=\"listitem\"]",
+          "bbox": {
+            "x": 568,
+            "y": 88,
+            "width": 76,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "More"
+        },
+        {
+          "targetId": "t_28",
+          "kind": "button",
+          "label": "More",
+          "selector": "div[role=\"button\"]",
+          "bbox": {
+            "x": 568,
+            "y": 88,
+            "width": 76,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "More"
+        },
+        {
+          "targetId": "t_29",
+          "kind": "card",
+          "label": "More filters",
+          "selector": "div[aria-label=\"More filters\"]",
+          "bbox": {
+            "x": 568,
+            "y": 88,
+            "width": 76,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "More"
+        },
+        {
+          "targetId": "t_30",
+          "kind": "button",
+          "label": "Tools",
+          "selector": "#hdtb-tls",
+          "bbox": {
+            "x": 644,
+            "y": 88,
+            "width": 76,
+            "height": 48
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Tools"
+        },
+        {
+          "targetId": "t_31",
+          "kind": "link",
+          "label": "Lecture Publications\n\nLecture Publications\nhttps://lecturepublicationsbd.com",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 83,
+            "y": 179,
+            "width": 252,
+            "height": 44
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Lecture Publications\n\nLecture Publications\nhttps://lecturepublicationsbd.com"
+        },
+        {
+          "targetId": "t_32",
+          "kind": "link",
+          "label": "Translate this page",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 312,
+            "y": 186,
+            "width": 102,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Translate this page"
+        },
+        {
+          "targetId": "t_33",
+          "kind": "button",
+          "label": "About this result",
+          "selector": "div[aria-label=\"About this result\"]",
+          "bbox": {
+            "x": 422,
+            "y": 184,
+            "width": 28,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_34",
+          "kind": "link",
+          "label": "Read more",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 310,
+            "y": 285,
+            "width": 69,
+            "height": 15
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Read more"
+        },
+        {
+          "targetId": "t_35",
+          "kind": "button",
+          "label": "What do you mean by lecture?",
+          "selector": "div[role=\"button\"]",
+          "bbox": {
+            "x": 83,
+            "y": 348,
+            "width": 652,
+            "height": 52
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "What do you mean by lecture?"
+        },
+        {
+          "targetId": "t_36",
+          "kind": "button",
+          "label": "What is the full meaning of lecturing?",
+          "selector": "div[role=\"button\"]",
+          "bbox": {
+            "x": 83,
+            "y": 401,
+            "width": 652,
+            "height": 52
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "What is the full meaning of lecturing?"
+        },
+        {
+          "targetId": "t_37",
+          "kind": "button",
+          "label": "What does it mean to lecture someone?",
+          "selector": "div[role=\"button\"]",
+          "bbox": {
+            "x": 83,
+            "y": 453,
+            "width": 652,
+            "height": 52
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "What does it mean to lecture someone?"
+        },
+        {
+          "targetId": "t_38",
+          "kind": "button",
+          "label": "কাউকে বক্তৃতা দেওয়ার অর্থ কি?",
+          "selector": "div[role=\"button\"]",
+          "bbox": {
+            "x": 83,
+            "y": 506,
+            "width": 652,
+            "height": 52
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "কাউকে বক্তৃতা দেওয়ার অর্থ কি?"
+        },
+        {
+          "targetId": "t_39",
+          "kind": "button",
+          "label": "বক্তৃতা এর সমার্থক শব্দ কি?",
+          "selector": "div[role=\"button\"]",
+          "bbox": {
+            "x": 83,
+            "y": 559,
+            "width": 652,
+            "height": 52
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "বক্তৃতা এর সমার্থক শব্দ কি?"
+        },
+        {
+          "targetId": "t_40",
+          "kind": "link",
+          "label": "NU Online Video Lectures\n\nNational University\nhttp://onlinelecture.nu.ac.bd",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 83,
+            "y": 662,
+            "width": 229,
+            "height": 49
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "NU Online Video Lectures\n\nNational University\nhttp://onlinelecture.nu.ac.bd"
+        },
+        {
+          "targetId": "t_41",
+          "kind": "button",
+          "label": "About this result",
+          "selector": "div[aria-label=\"About this result\"]",
+          "bbox": {
+            "x": 278,
+            "y": 673,
+            "width": 28,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_42",
+          "kind": "button",
+          "label": "button:div",
+          "selector": "div[role=\"button\"]",
+          "bbox": {
+            "x": 1161,
+            "y": 178,
+            "width": 24,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_43",
+          "kind": "card",
+          "label": "More options for Lecture",
+          "selector": "span[aria-label=\"More options for Lecture\"]",
+          "bbox": {
+            "x": 1161,
+            "y": 178,
+            "width": 24,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_44",
+          "kind": "card",
+          "label": "Featured results",
+          "selector": "#_Gqn1abWBIM-8mLQP7fXoqQk_29",
+          "bbox": {
+            "x": 811,
+            "y": 226,
+            "width": 372,
+            "height": 193
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "A lecture is an oral presentation intended to present information or teach people about a particular subject, for example by a university or college teacher. Lectures are used to convey critical information, history, background, theories, and equations.\nSource: \nWikipedia"
+        },
+        {
+          "targetId": "t_45",
+          "kind": "link",
+          "label": "Wikipedia",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 858,
+            "y": 375,
+            "width": 65,
+            "height": 17
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Wikipedia"
+        }
+      ]
+    },
+    {
+      "site": "GitHub",
+      "url": "https://github.com/search?q=lecture&type=repositories",
+      "title": "Repository search results · GitHub",
+      "stateHash": "c6e79330d3b984110ae7444545b32315f0dd9a55eceb72c71a022fd8d9f35bcf",
+      "targetCount": 75,
+      "checks": {
+        "searchInputOrControl": true
+      },
+      "passed": true,
+      "targets": [
+        {
+          "targetId": "t_1",
+          "kind": "link",
+          "label": "Skip to content",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Skip to content"
+        },
+        {
+          "targetId": "t_2",
+          "kind": "link",
+          "label": "Homepage",
+          "selector": "a[aria-label=\"Homepage\"]",
+          "bbox": {
+            "x": 32,
+            "y": 19,
+            "width": 32,
+            "height": 33
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_3",
+          "kind": "card",
+          "label": "Global",
+          "selector": "nav[aria-label=\"Global\"]",
+          "bbox": {
+            "x": 80,
+            "y": 16,
+            "width": 602,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Platform\nSolutions\nResources\nOpen Source\nEnterprise\nPricing"
+        },
+        {
+          "targetId": "t_4",
+          "kind": "button",
+          "label": "Platform",
+          "selector": "button:nth-of-type(1)",
+          "bbox": {
+            "x": 80,
+            "y": 16,
+            "width": 96,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Platform"
+        },
+        {
+          "targetId": "t_5",
+          "kind": "button",
+          "label": "Solutions",
+          "selector": "button:nth-of-type(1)",
+          "bbox": {
+            "x": 176,
+            "y": 16,
+            "width": 101,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Solutions"
+        },
+        {
+          "targetId": "t_6",
+          "kind": "button",
+          "label": "Resources",
+          "selector": "button:nth-of-type(1)",
+          "bbox": {
+            "x": 277,
+            "y": 16,
+            "width": 107,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Resources"
+        },
+        {
+          "targetId": "t_7",
+          "kind": "button",
+          "label": "Open Source",
+          "selector": "button:nth-of-type(1)",
+          "bbox": {
+            "x": 384,
+            "y": 16,
+            "width": 128,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Open Source"
+        },
+        {
+          "targetId": "t_8",
+          "kind": "button",
+          "label": "Enterprise",
+          "selector": "button:nth-of-type(1)",
+          "bbox": {
+            "x": 512,
+            "y": 16,
+            "width": 107,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Enterprise"
+        },
+        {
+          "targetId": "t_9",
+          "kind": "link",
+          "label": "Pricing",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 618,
+            "y": 16,
+            "width": 64,
+            "height": 40
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Pricing"
+        },
+        {
+          "targetId": "t_10",
+          "kind": "button",
+          "label": "Search or jump to…",
+          "selector": "button[aria-label=\"Search or jump to…\"]",
+          "bbox": {
+            "x": 708,
+            "y": 21,
+            "width": 319,
+            "height": 31
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Search or jump to..."
+        },
+        {
+          "targetId": "t_11",
+          "kind": "link",
+          "label": "Sign in",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 1040,
+            "y": 20,
+            "width": 66,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Sign in"
+        },
+        {
+          "targetId": "t_12",
+          "kind": "link",
+          "label": "Sign up",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 1118,
+            "y": 20,
+            "width": 72,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Sign up"
+        },
+        {
+          "targetId": "t_13",
+          "kind": "button",
+          "label": "button:button",
+          "selector": "#icon-button-a82197fd-8f81-446e-8733-8c36f63da5b5",
+          "bbox": {
+            "x": 1202,
+            "y": 20,
+            "width": 32,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_14",
+          "kind": "link",
+          "label": "Code\n...\n (...)\nresults",
+          "selector": "#_r_4_",
+          "bbox": {
+            "x": 16,
+            "y": 132,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Code\n...\n (...)\nresults"
+        },
+        {
+          "targetId": "t_15",
+          "kind": "link",
+          "label": "Repositories\n162k\n (162k)\nresults",
+          "selector": "#_r_5_",
+          "bbox": {
+            "x": 16,
+            "y": 164,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Repositories\n162k\n (162k)\nresults"
+        },
+        {
+          "targetId": "t_16",
+          "kind": "link",
+          "label": "Issues\n89k\n (89k)\nresults",
+          "selector": "#_r_6_",
+          "bbox": {
+            "x": 16,
+            "y": 196,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Issues\n89k\n (89k)\nresults"
+        },
+        {
+          "targetId": "t_17",
+          "kind": "link",
+          "label": "Pull requests\n113k\n (113k)\nresults",
+          "selector": "#_r_7_",
+          "bbox": {
+            "x": 16,
+            "y": 228,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Pull requests\n113k\n (113k)\nresults"
+        },
+        {
+          "targetId": "t_18",
+          "kind": "link",
+          "label": "Discussions\n4k\n (4k)\nresults",
+          "selector": "#_r_8_",
+          "bbox": {
+            "x": 16,
+            "y": 260,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Discussions\n4k\n (4k)\nresults"
+        },
+        {
+          "targetId": "t_19",
+          "kind": "link",
+          "label": "Users\n1k\n (1k)\nresults",
+          "selector": "#_r_9_",
+          "bbox": {
+            "x": 16,
+            "y": 292,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Users\n1k\n (1k)\nresults"
+        },
+        {
+          "targetId": "t_20",
+          "kind": "button",
+          "label": "More",
+          "selector": "#_r_a_",
+          "bbox": {
+            "x": 16,
+            "y": 324,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "More"
+        },
+        {
+          "targetId": "t_21",
+          "kind": "link",
+          "label": "HTML",
+          "selector": "#_r_c_",
+          "bbox": {
+            "x": 16,
+            "y": 403,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "HTML"
+        },
+        {
+          "targetId": "t_22",
+          "kind": "card",
+          "label": "HTML",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 409,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "HTML"
+        },
+        {
+          "targetId": "t_23",
+          "kind": "link",
+          "label": "JavaScript",
+          "selector": "#_r_d_",
+          "bbox": {
+            "x": 16,
+            "y": 435,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "JavaScript"
+        },
+        {
+          "targetId": "t_24",
+          "kind": "card",
+          "label": "JavaScript",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 441,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "JavaScript"
+        },
+        {
+          "targetId": "t_25",
+          "kind": "link",
+          "label": "Python",
+          "selector": "#_r_e_",
+          "bbox": {
+            "x": 16,
+            "y": 467,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Python"
+        },
+        {
+          "targetId": "t_26",
+          "kind": "card",
+          "label": "Python",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 473,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Python"
+        },
+        {
+          "targetId": "t_27",
+          "kind": "link",
+          "label": "Java",
+          "selector": "#_r_f_",
+          "bbox": {
+            "x": 16,
+            "y": 499,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Java"
+        },
+        {
+          "targetId": "t_28",
+          "kind": "card",
+          "label": "Java",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 505,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Java"
+        },
+        {
+          "targetId": "t_29",
+          "kind": "link",
+          "label": "Jupyter Notebook",
+          "selector": "#_r_g_",
+          "bbox": {
+            "x": 16,
+            "y": 531,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Jupyter Notebook"
+        },
+        {
+          "targetId": "t_30",
+          "kind": "card",
+          "label": "Jupyter Notebook",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 537,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Jupyter Notebook"
+        },
+        {
+          "targetId": "t_31",
+          "kind": "link",
+          "label": "C++",
+          "selector": "#_r_h_",
+          "bbox": {
+            "x": 16,
+            "y": 563,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "C++"
+        },
+        {
+          "targetId": "t_32",
+          "kind": "card",
+          "label": "C++",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 569,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "C++"
+        },
+        {
+          "targetId": "t_33",
+          "kind": "link",
+          "label": "C#",
+          "selector": "#_r_i_",
+          "bbox": {
+            "x": 16,
+            "y": 595,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "C#"
+        },
+        {
+          "targetId": "t_34",
+          "kind": "card",
+          "label": "C#",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 601,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "C#"
+        },
+        {
+          "targetId": "t_35",
+          "kind": "link",
+          "label": "TypeScript",
+          "selector": "#_r_j_",
+          "bbox": {
+            "x": 16,
+            "y": 627,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "TypeScript"
+        },
+        {
+          "targetId": "t_36",
+          "kind": "card",
+          "label": "TypeScript",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 633,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "TypeScript"
+        },
+        {
+          "targetId": "t_37",
+          "kind": "link",
+          "label": "TeX",
+          "selector": "#_r_k_",
+          "bbox": {
+            "x": 16,
+            "y": 659,
+            "width": 249,
+            "height": 32
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "TeX"
+        },
+        {
+          "targetId": "t_38",
+          "kind": "card",
+          "label": "TeX",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 665,
+            "width": 215,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "TeX"
+        },
+        {
+          "targetId": "t_39",
+          "kind": "link",
+          "label": "CSS",
+          "selector": "#_r_l_",
+          "bbox": {
+            "x": 16,
+            "y": 691,
+            "width": 249,
+            "height": 20
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "CSS"
+        },
+        {
+          "targetId": "t_40",
+          "kind": "card",
+          "label": "CSS",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 42,
+            "y": 697,
+            "width": 215,
+            "height": 14
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "CSS"
+        },
+        {
+          "targetId": "t_41",
+          "kind": "card",
+          "label": "Draggable pane splitter",
+          "selector": "div[aria-label=\"Draggable pane splitter\"]",
+          "bbox": {
+            "x": 294,
+            "y": 72,
+            "width": 5,
+            "height": 639
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_42",
+          "kind": "button",
+          "label": "Sort by: Best match",
+          "selector": "#_r_19_",
+          "bbox": {
+            "x": 703,
+            "y": 88,
+            "width": 139,
+            "height": 28
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Sort by: Best match"
+        },
+        {
+          "targetId": "t_43",
+          "kind": "button",
+          "label": "Open column options",
+          "selector": "#_r_1i_",
+          "bbox": {
+            "x": 850,
+            "y": 88,
+            "width": 28,
+            "height": 28
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": ""
+        },
+        {
+          "targetId": "t_44",
+          "kind": "link",
+          "label": "oxford-cs-deepnlp-2017/lectures",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 368,
+            "y": 149,
+            "width": 239,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "oxford-cs-deepnlp-2017/lectures"
+        },
+        {
+          "targetId": "t_45",
+          "kind": "link",
+          "label": "nlp",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 338,
+            "y": 206,
+            "width": 37,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "nlp"
+        },
+        {
+          "targetId": "t_46",
+          "kind": "link",
+          "label": "machine-learning",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 383,
+            "y": 206,
+            "width": 115,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "machine-learning"
+        },
+        {
+          "targetId": "t_47",
+          "kind": "link",
+          "label": "natural-language-processing",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 506,
+            "y": 206,
+            "width": 177,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "natural-language-processing"
+        },
+        {
+          "targetId": "t_48",
+          "kind": "link",
+          "label": "deep-learning",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 692,
+            "y": 206,
+            "width": 97,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "deep-learning"
+        },
+        {
+          "targetId": "t_49",
+          "kind": "link",
+          "label": "oxford",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 338,
+            "y": 237,
+            "width": 56,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "oxford"
+        },
+        {
+          "targetId": "t_50",
+          "kind": "link",
+          "label": "15856 stars",
+          "selector": "a[aria-label=\"15856 stars\"]",
+          "bbox": {
+            "x": 338,
+            "y": 269,
+            "width": 50,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "15.9k"
+        },
+        {
+          "targetId": "t_51",
+          "kind": "card",
+          "label": "Jul 3, 2023, 4:46 AM GMT+6",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 456,
+            "y": 269,
+            "width": 73,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "on Jul 3, 2023"
+        },
+        {
+          "targetId": "t_52",
+          "kind": "card",
+          "label": "Jul 3, 2023, 4:46 AM GMT+6",
+          "selector": "span:nth-of-type(1)",
+          "bbox": {
+            "x": 456,
+            "y": 269,
+            "width": 73,
+            "height": 16
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "on Jul 3, 2023"
+        },
+        {
+          "targetId": "t_53",
+          "kind": "button",
+          "label": "Star",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 803,
+            "y": 153,
+            "width": 59,
+            "height": 28
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Star"
+        },
+        {
+          "targetId": "t_54",
+          "kind": "link",
+          "label": "Developer-Y/cs-video-courses",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 368,
+            "y": 337,
+            "width": 218,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Developer-Y/cs-video-courses"
+        },
+        {
+          "targetId": "t_55",
+          "kind": "link",
+          "label": "computer-science",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 338,
+            "y": 395,
+            "width": 116,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "computer-science"
+        },
+        {
+          "targetId": "t_56",
+          "kind": "link",
+          "label": "security",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 462,
+            "y": 395,
+            "width": 62,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "security"
+        },
+        {
+          "targetId": "t_57",
+          "kind": "link",
+          "label": "machine-learning",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 532,
+            "y": 395,
+            "width": 115,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "machine-learning"
+        },
+        {
+          "targetId": "t_58",
+          "kind": "link",
+          "label": "bioinformatics",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 656,
+            "y": 395,
+            "width": 99,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "bioinformatics"
+        },
+        {
+          "targetId": "t_59",
+          "kind": "link",
+          "label": "web-development",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 338,
+            "y": 426,
+            "width": 119,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "web-development"
+        },
+        {
+          "targetId": "t_60",
+          "kind": "link",
+          "label": "80569 stars",
+          "selector": "a[aria-label=\"80569 stars\"]",
+          "bbox": {
+            "x": 338,
+            "y": 457,
+            "width": 50,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "80.6k"
+        },
+        {
+          "targetId": "t_61",
+          "kind": "card",
+          "label": "May 1, 2026, 11:46 PM GMT+6",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 456,
+            "y": 457,
+            "width": 70,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "13 hours ago"
+        },
+        {
+          "targetId": "t_62",
+          "kind": "card",
+          "label": "May 1, 2026, 11:46 PM GMT+6",
+          "selector": "span:nth-of-type(1)",
+          "bbox": {
+            "x": 456,
+            "y": 458,
+            "width": 70,
+            "height": 16
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "13 hours ago"
+        },
+        {
+          "targetId": "t_63",
+          "kind": "button",
+          "label": "Star",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 803,
+            "y": 341,
+            "width": 59,
+            "height": 28
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Star"
+        },
+        {
+          "targetId": "t_64",
+          "kind": "link",
+          "label": "zebangyang/Lecture",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 368,
+            "y": 526,
+            "width": 150,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "zebangyang/Lecture"
+        },
+        {
+          "targetId": "t_65",
+          "kind": "link",
+          "label": "algorithms",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 338,
+            "y": 584,
+            "width": 79,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "algorithms"
+        },
+        {
+          "targetId": "t_66",
+          "kind": "link",
+          "label": "data-structures",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 424,
+            "y": 584,
+            "width": 103,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "data-structures"
+        },
+        {
+          "targetId": "t_67",
+          "kind": "link",
+          "label": "graduate",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 535,
+            "y": 584,
+            "width": 69,
+            "height": 22
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "graduate"
+        },
+        {
+          "targetId": "t_68",
+          "kind": "card",
+          "label": "C++ language",
+          "selector": "span[aria-label=\"C++ language\"]",
+          "bbox": {
+            "x": 356,
+            "y": 615,
+            "width": 24,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "C++"
+        },
+        {
+          "targetId": "t_69",
+          "kind": "link",
+          "label": "426 stars",
+          "selector": "a[aria-label=\"426 stars\"]",
+          "bbox": {
+            "x": 399,
+            "y": 615,
+            "width": 41,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "426"
+        },
+        {
+          "targetId": "t_70",
+          "kind": "card",
+          "label": "Apr 17, 2022, 7:27 PM GMT+6",
+          "selector": "div:nth-of-type(1)",
+          "bbox": {
+            "x": 508,
+            "y": 615,
+            "width": 84,
+            "height": 18
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "on Apr 17, 2022"
+        },
+        {
+          "targetId": "t_71",
+          "kind": "card",
+          "label": "Apr 17, 2022, 7:27 PM GMT+6",
+          "selector": "span:nth-of-type(1)",
+          "bbox": {
+            "x": 508,
+            "y": 616,
+            "width": 84,
+            "height": 16
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "on Apr 17, 2022"
+        },
+        {
+          "targetId": "t_72",
+          "kind": "button",
+          "label": "Star",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 803,
+            "y": 530,
+            "width": 59,
+            "height": 28
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Star"
+        },
+        {
+          "targetId": "t_73",
+          "kind": "link",
+          "label": "gpu-mode/lectures",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 368,
+            "y": 684,
+            "width": 142,
+            "height": 24
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "gpu-mode/lectures"
+        },
+        {
+          "targetId": "t_74",
+          "kind": "button",
+          "label": "Star",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 803,
+            "y": 688,
+            "width": 59,
+            "height": 23
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Star"
+        },
+        {
+          "targetId": "t_75",
+          "kind": "link",
+          "label": "Explore sponsorable projects",
+          "selector": "a:nth-of-type(1)",
+          "bbox": {
+            "x": 919,
+            "y": 318,
+            "width": 307,
+            "height": 26
+          },
+          "visible": true,
+          "enabled": true,
+          "actions": [
+            "click"
+          ],
+          "text": "Explore sponsorable projects"
+        }
+      ]
+    }
+  ]
+}

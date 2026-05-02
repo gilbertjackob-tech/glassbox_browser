@@ -26638,6 +26638,125 @@ var vlmPageApi = {
       elements
     };
   },
+  async actionTargets(tabId) {
+    const tab = getTabOrThrow(tabId);
+    const targets = await runInPage(tab, () => {
+      function visible(rect, style, el) {
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        if (rect.bottom < 0 || rect.right < 0) return false;
+        if (rect.top > window.innerHeight || rect.left > window.innerWidth) return false;
+        if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+        if (el.hidden) return false;
+        return true;
+      }
+      function clipRect(rect) {
+        const left = Math.max(0, rect.left);
+        const top = Math.max(0, rect.top);
+        const right = Math.min(window.innerWidth, rect.right);
+        const bottom = Math.min(window.innerHeight, rect.bottom);
+        return {
+          x: Math.round(left),
+          y: Math.round(top),
+          width: Math.round(Math.max(0, right - left)),
+          height: Math.round(Math.max(0, bottom - top))
+        };
+      }
+      function selectorFor(el) {
+        if (el.id) return `#${CSS.escape(el.id)}`;
+        const name = el.getAttribute("name");
+        if (name) return `${el.tagName.toLowerCase()}[name="${name.replace(/"/g, '\\"')}"]`;
+        const aria = el.getAttribute("aria-label");
+        if (aria) return `${el.tagName.toLowerCase()}[aria-label="${aria.replace(/"/g, '\\"')}"]`;
+        const placeholder = el.getAttribute("placeholder");
+        if (placeholder) return `${el.tagName.toLowerCase()}[placeholder="${placeholder.replace(/"/g, '\\"')}"]`;
+        const role = el.getAttribute("role");
+        if (role) return `${el.tagName.toLowerCase()}[role="${role.replace(/"/g, '\\"')}"]`;
+        const parent = el.parentElement;
+        if (!parent) return el.tagName.toLowerCase();
+        const sameTag = Array.from(parent.children).filter((child) => child.tagName === el.tagName);
+        const idx = sameTag.indexOf(el) + 1;
+        return `${el.tagName.toLowerCase()}:nth-of-type(${Math.max(1, idx)})`;
+      }
+      function kindFor(el) {
+        const tag = el.tagName.toLowerCase();
+        const role = (el.getAttribute("role") || "").toLowerCase();
+        const type = (el.type || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || tag === "select" || role === "textbox" || role === "searchbox") {
+          return "input";
+        }
+        if (tag === "button" || role === "button" || type === "button" || type === "submit") {
+          return "button";
+        }
+        if (tag === "a" || role === "link") {
+          return "link";
+        }
+        return "card";
+      }
+      function actionsFor(el, kind, isEnabled) {
+        if (!isEnabled) return [];
+        if (kind === "input") return ["focus", "type", "clear"];
+        if (kind === "button" || kind === "link") return ["click"];
+        return ["click"];
+      }
+      function labelFor(el) {
+        const aria = el.getAttribute("aria-label");
+        const placeholder = el.getAttribute("placeholder");
+        const title = el.getAttribute("title");
+        const text = (el.innerText || el.textContent || "").trim();
+        return (aria || placeholder || title || text || "").slice(0, 240);
+      }
+      const selector = [
+        "input",
+        "textarea",
+        "select",
+        "button",
+        "a",
+        '[role="button"]',
+        '[role="link"]',
+        '[role="textbox"]',
+        '[role="searchbox"]',
+        "[aria-label]",
+        "[placeholder]",
+        "[title]",
+        '[contenteditable="true"]',
+        "article",
+        '[role="article"]',
+        '[role="listitem"]',
+        ".card"
+      ].join(",");
+      const elements = Array.from(document.querySelectorAll(selector)).filter((node) => node instanceof HTMLElement).map((node) => node).slice(0, 1200);
+      let serial = 1;
+      const targets2 = elements.map((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        const isVisible = visible(rect, style, el);
+        const isEnabled = !el.disabled && style.pointerEvents !== "none" && el.getAttribute("aria-disabled") !== "true";
+        if (!isVisible) return null;
+        const kind = kindFor(el);
+        const label = labelFor(el);
+        if (!label && kind === "card") return null;
+        return {
+          targetId: `t_${serial++}`,
+          kind,
+          label: label || `${kind}:${el.tagName.toLowerCase()}`,
+          selector: selectorFor(el),
+          bbox: clipRect(rect),
+          visible: isVisible,
+          enabled: isEnabled,
+          actions: actionsFor(el, kind, isEnabled),
+          text: (el.innerText || el.textContent || "").trim().slice(0, 300)
+        };
+      }).filter(Boolean).slice(0, 400);
+      return targets2;
+    });
+    return {
+      tabId,
+      url: tab.webContents.getURL(),
+      title: tab.title,
+      stateHash: await getDomHash(tab),
+      targets
+    };
+  },
   async screenshot(tabId, options) {
     const tab = getTabOrThrow(tabId);
     const selector = options.selector;
@@ -27244,6 +27363,13 @@ function startApiServer(port = 3e3) {
     app4.get("/api/tabs/:id/a11y", async (req, res) => {
       try {
         res.json(await vlmPageApi.a11y(req.params.id));
+      } catch (error) {
+        errorResponse(res, error, 404);
+      }
+    });
+    app4.get("/api/tabs/:id/action-targets", async (req, res) => {
+      try {
+        res.json(await vlmPageApi.actionTargets(req.params.id));
       } catch (error) {
         errorResponse(res, error, 404);
       }
