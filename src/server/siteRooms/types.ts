@@ -1,4 +1,7 @@
 export type SiteRoomName =
+  | 'chatgpt_home'
+  | 'chatgpt_chat'
+  | 'chatgpt_unknown'
   | 'github_home'
   | 'github_repo'
   | 'github_search_results'

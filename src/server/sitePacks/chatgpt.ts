@@ -8,10 +8,10 @@ export const chatgptPack: SiteStarterPack = {
       targetKey: 'prompt_box',
       kind: 'input',
       selectors: [
-        'textarea[placeholder]',
         'textarea[data-testid="prompt-textarea"]',
-        '[contenteditable="true"]',
         '#prompt-textarea',
+        'textarea[placeholder]',
+        '[contenteditable="true"]',
       ],
       actions: ['focus', 'type', 'clear'],
       verify: {
@@ -44,6 +44,43 @@ export const chatgptPack: SiteStarterPack = {
         urlChanged: true,
       },
     },
+    {
+      targetKey: 'last_assistant_message',
+      kind: 'card',
+      selectors: [
+        '[data-message-author-role="assistant"]:last-of-type',
+        '[data-testid*="conversation-turn"] [data-message-author-role="assistant"]',
+        '.markdown',
+      ],
+      actions: ['click'],
+      verify: {
+        domChanged: true,
+      },
+    },
+    {
+      targetKey: 'last_user_message',
+      kind: 'card',
+      selectors: [
+        '[data-message-author-role="user"]:last-of-type',
+        '[data-testid*="conversation-turn"] [data-message-author-role="user"]',
+      ],
+      actions: ['click'],
+      verify: {
+        domChanged: true,
+      },
+    },
+    {
+      targetKey: 'conversation_list',
+      kind: 'card',
+      selectors: [
+        'nav a[href^="/c/"]',
+        'a[href^="/c/"]',
+      ],
+      actions: ['click'],
+      verify: {
+        domChanged: true,
+      },
+    },
   ],
   microSkills: [
     {
@@ -68,6 +105,21 @@ export const chatgptPack: SiteStarterPack = {
           action: 'click',
           verify: {
             domChanged: true,
+          },
+        },
+      ],
+    },
+    {
+      name: 'chatgpt_new_chat',
+      queryPattern: 'start new chatgpt chat',
+      steps: [
+        {
+          name: 'new chat',
+          targetKey: 'new_chat_button',
+          kind: 'button',
+          action: 'click',
+          verify: {
+            urlChanged: true,
           },
         },
       ],

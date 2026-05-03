@@ -20,7 +20,12 @@ import {
   saveMicroSkill,
 } from './skillService.js';
 import { detectSiteRoom } from './siteRooms/index.js';
-import { getGitHubRoomSuggestions, getGoogleRoomSuggestions, getYouTubeRoomSuggestions } from './siteRooms/suggestions.js';
+import {
+  getChatGptRoomSuggestions,
+  getGitHubRoomSuggestions,
+  getGoogleRoomSuggestions,
+  getYouTubeRoomSuggestions,
+} from './siteRooms/suggestions.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -614,6 +619,19 @@ export const vlmPageApi = {
 
   async getSiteRoomSuggestions(tabId: string) {
     const room = await this.getSiteRoom(tabId);
+
+    if (room.site === 'chatgpt') {
+      return {
+        ok: room.ok || room.reason === 'AUTH_REQUIRED',
+        site: room.site,
+        room: room.room,
+        confidence: room.confidence,
+        url: room.url,
+        reason: room.reason,
+        suggestions: getChatGptRoomSuggestions(room),
+        landmarks: room.landmarks,
+      };
+    }
 
     if (!room.ok) {
       return {

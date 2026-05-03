@@ -230,3 +230,61 @@ export function getGitHubRoomSuggestions(room: SiteRoomResult): RoomSuggestion[]
 
   return suggestions;
 }
+
+export function getChatGptRoomSuggestions(room: SiteRoomResult): RoomSuggestion[] {
+  const suggestions: RoomSuggestion[] = [];
+
+  if (room.room === 'chatgpt_unknown' && room.reason === 'AUTH_REQUIRED') {
+    suggestions.push({
+      type: 'info',
+      safe: false,
+      guarded: true,
+      reason: 'ChatGPT requires login before prompt actions are available in this environment.',
+    });
+    return suggestions;
+  }
+
+  if (room.room === 'chatgpt_home') {
+    suggestions.push({
+      type: 'skill',
+      name: 'chatgpt_send_prompt',
+      safe: true,
+      inputs: ['prompt'],
+      reason: 'ChatGPT home has a prompt box.',
+    });
+  }
+
+  if (room.room === 'chatgpt_chat') {
+    suggestions.push({
+      type: 'skill',
+      name: 'chatgpt_send_prompt',
+      safe: true,
+      inputs: ['prompt'],
+      reason: 'Current chat has a prompt box for follow-up prompts.',
+    });
+
+    suggestions.push({
+      type: 'skill',
+      name: 'chatgpt_new_chat',
+      safe: true,
+      reason: 'Starting a new chat is a safe navigation action.',
+    });
+
+    suggestions.push({
+      type: 'info',
+      safe: false,
+      guarded: true,
+      reason: 'Deleting chats, changing memory or settings, uploading files, and workspace or billing actions are guarded and disabled in this fast pack.',
+    });
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push({
+      type: 'info',
+      safe: true,
+      reason: 'No ChatGPT room-specific suggestions available yet.',
+    });
+  }
+
+  return suggestions;
+}

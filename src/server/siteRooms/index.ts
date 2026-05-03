@@ -1,3 +1,4 @@
+import { detectChatGptRoom } from './chatgptRoomDetector.js';
 import { detectGitHubRoom } from './githubRoomDetector.js';
 import { detectGoogleRoom } from './googleRoomDetector.js';
 import { detectYouTubeRoom } from './youtubeRoomDetector.js';
@@ -21,6 +22,10 @@ export async function detectSiteRoom(input: {
 
   if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
     return detectYouTubeRoom(input);
+  }
+
+  if (host === 'chatgpt.com' || host.endsWith('.chatgpt.com')) {
+    return detectChatGptRoom(input);
   }
 
   if (host === 'google.com' || host.endsWith('.google.com')) {
