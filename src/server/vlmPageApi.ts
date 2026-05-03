@@ -19,6 +19,7 @@ import {
   renderSkillSteps,
   saveMicroSkill,
 } from './skillService.js';
+import { detectSiteRoom } from './siteRooms/index.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -515,6 +516,49 @@ export const vlmPageApi = {
   async getState(tabId: string) {
     const tab = getTabOrThrow(tabId);
     return await getPageStateSnapshot(tab);
+  },
+
+  async getSiteRoom(tabId: string) {
+    const tab = getTabOrThrow(tabId);
+    const url = tab.webContents.getURL();
+    const title = tab.title;
+
+    const result = await detectSiteRoom({
+      url,
+      title,
+      resolveTarget: async (targetKey: string, kind?: string) => {
+        return await this.resolveTarget(tabId, {
+          targetKey,
+          kind,
+        });
+      },
+      evaluate: async (script: string) => {
+        return await this.evaluate(tabId, { script });
+      },
+    });
+
+    if (!result) {
+      return {
+        ok: false,
+        host: (() => {
+          try {
+            return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+          } catch {
+            return 'unknown';
+          }
+        })(),
+        site: 'unknown',
+        room: 'unknown',
+        confidence: 0,
+        url,
+        title,
+        signals: {},
+        landmarks: [],
+        reason: 'NO_SITE_ROOM_DETECTOR',
+      };
+    }
+
+    return result;
   },
 
   async resolveTarget(tabId: string, body: any) {
