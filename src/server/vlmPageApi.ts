@@ -20,7 +20,7 @@ import {
   saveMicroSkill,
 } from './skillService.js';
 import { detectSiteRoom } from './siteRooms/index.js';
-import { getYouTubeRoomSuggestions } from './siteRooms/suggestions.js';
+import { getGoogleRoomSuggestions, getYouTubeRoomSuggestions } from './siteRooms/suggestions.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -271,6 +271,56 @@ async function scrollTargetIntoView(tab: TabMetadata, selector: string) {
     el.scrollIntoView({ block: 'center', inline: 'nearest' });
     return true;
   }, [selector]);
+}
+
+async function getResolvedLinkHref(tab: TabMetadata, selector: string) {
+  return await runInPage(tab, (targetSelector: string) => {
+    const el = document.querySelector(targetSelector) as HTMLAnchorElement | null;
+    if (!el) return '';
+
+    const href = el.href || el.getAttribute('href') || '';
+    if (!href) return '';
+
+    try {
+      return new URL(href, location.href).toString();
+    } catch {
+      return '';
+    }
+  }, [selector]).catch(() => '');
+}
+
+async function navigateToResolvedLinkHref(tab: TabMetadata, target: ActionTarget) {
+  if (target.kind !== 'link' || !target.selector) {
+    return {
+      ok: false,
+      reason: 'DIRECT_LINK_NAVIGATION_NOT_APPLICABLE',
+      href: '',
+    };
+  }
+
+  const href = await getResolvedLinkHref(tab, target.selector);
+  if (!href) {
+    return {
+      ok: false,
+      reason: 'DIRECT_LINK_HREF_NOT_FOUND',
+      href: '',
+    };
+  }
+
+  try {
+    await tab.webContents.loadURL(href);
+    return {
+      ok: true,
+      reason: 'DIRECT_LINK_NAVIGATION_OK',
+      href,
+    };
+  } catch (error: any) {
+    return {
+      ok: false,
+      reason: error?.message || 'DIRECT_LINK_NAVIGATION_FAILED',
+      href,
+    };
+  }
 }
 
 async function verifyTargetWithVisibilityRecovery(
@@ -586,6 +636,18 @@ export const vlmPageApi = {
       };
     }
 
+    if (room.site === 'google') {
+      return {
+        ok: true,
+        site: room.site,
+        room: room.room,
+        confidence: room.confidence,
+        url: room.url,
+        suggestions: getGoogleRoomSuggestions(room),
+        landmarks: room.landmarks,
+      };
+    }
+
     return {
       ok: true,
       site: room.site,
@@ -761,7 +823,7 @@ export const vlmPageApi = {
       runQuery: async (selector: string) => {
         return await this.query(tabId, {
           selector,
-          limit: 1,
+          limit: 25,
         });
       },
     });
@@ -1122,10 +1184,21 @@ export const vlmPageApi = {
       const result = await this.click(tabId, {
         selector: target.selector,
       });
-      const actionVerification = await buildActionVerification(tab, before, {
+      let actionVerification = await buildActionVerification(tab, before, {
         beforeValue,
         expectFocusSelector: focusSelector,
       });
+      let directLinkNavigation: any = null;
+
+      if (target.kind === 'link' && !actionVerification.urlChanged) {
+        directLinkNavigation = await navigateToResolvedLinkHref(tab, target);
+        if (directLinkNavigation.ok) {
+          actionVerification = await buildActionVerification(tab, before, {
+            beforeValue,
+            expectFocusSelector: focusSelector,
+          });
+        }
+      }
       const memoryRecord = rememberSuccessfulTarget({
         profileId: tab.profileId,
         url: tab.webContents.getURL(),
@@ -1142,6 +1215,7 @@ export const vlmPageApi = {
         recoveredByScroll,
         clickResult: result,
         actionVerification,
+        directLinkNavigation,
       });
 
       await logAction(tab, 'target.click', { targetId, selector: target.selector }, null, true, 'TARGET_CLICK_SENT', evidence);
@@ -1153,6 +1227,7 @@ export const vlmPageApi = {
         result,
         verification: actionVerification,
         memoryRecord,
+        directLinkNavigation,
         evidence,
       };
     }
@@ -1438,10 +1513,21 @@ export const vlmPageApi = {
 
     if (action === 'click') {
       const result = await this.click(tabId, { selector: target.selector });
-      const actionVerification = await buildActionVerification(tab, before, {
+      let actionVerification = await buildActionVerification(tab, before, {
         beforeValue,
         expectFocusSelector: focusSelector,
       });
+      let directLinkNavigation: any = null;
+
+      if (target.kind === 'link' && !actionVerification.urlChanged) {
+        directLinkNavigation = await navigateToResolvedLinkHref(tab, target);
+        if (directLinkNavigation.ok) {
+          actionVerification = await buildActionVerification(tab, before, {
+            beforeValue,
+            expectFocusSelector: focusSelector,
+          });
+        }
+      }
       const memoryRecord = rememberSuccessfulTarget({
         profileId: tab.profileId,
         url: tab.webContents.getURL(),
@@ -1458,6 +1544,7 @@ export const vlmPageApi = {
         clickResult: result,
         actionVerification,
         resolve: resolved,
+        directLinkNavigation,
       });
       await logAction(tab, 'resolve_and_act.click', { targetId: target.targetId, selector: target.selector }, null, true, 'RESOLVE_AND_ACT_CLICK_SENT', evidence);
       return {
@@ -1470,6 +1557,7 @@ export const vlmPageApi = {
         verification: actionVerification,
         memoryRecord,
         resolve: resolved,
+        directLinkNavigation,
         evidence,
       };
     }

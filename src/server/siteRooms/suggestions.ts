@@ -115,3 +115,52 @@ export function getYouTubeRoomSuggestions(room: SiteRoomResult): RoomSuggestion[
 
   return suggestions;
 }
+
+export function getGoogleRoomSuggestions(room: SiteRoomResult): RoomSuggestion[] {
+  const suggestions: RoomSuggestion[] = [];
+
+  if (room.room === 'google_home') {
+    suggestions.push({
+      type: 'skill',
+      name: 'google_search',
+      safe: true,
+      inputs: ['query'],
+      reason: 'Google home exposes the main search box for a safe search flow.',
+    });
+
+    suggestions.push({
+      type: 'skill',
+      name: 'google_search_and_open_first',
+      safe: true,
+      inputs: ['query'],
+      reason: 'Can search and open the first non-Google result safely after verification.',
+    });
+  }
+
+  if (room.room === 'google_search_results') {
+    suggestions.push({
+      type: 'skill',
+      name: 'google_open_first_result',
+      safe: true,
+      reason: 'Search results room exposes a vetted first external result.',
+    });
+
+    suggestions.push({
+      type: 'skill',
+      name: 'google_search_and_open_first',
+      safe: true,
+      inputs: ['query'],
+      reason: 'Can run a fresh search and open the first result safely.',
+    });
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push({
+      type: 'info',
+      safe: true,
+      reason: 'No room-specific suggestions available yet.',
+    });
+  }
+
+  return suggestions;
+}

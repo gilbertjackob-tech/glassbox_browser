@@ -1,4 +1,7 @@
 export type SiteRoomName =
+  | 'google_home'
+  | 'google_search_results'
+  | 'google_unknown'
   | 'youtube_home'
   | 'youtube_search_results'
   | 'youtube_watch_page'

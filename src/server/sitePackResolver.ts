@@ -6,6 +6,36 @@ export async function resolveFromStarterPack(input: {
   targetKey: string;
   kind?: string;
 }) {
+  function normalizeHost(url: string) {
+    try {
+      return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    } catch {
+      return String(url || '').toLowerCase().replace(/^www\./, '');
+    }
+  }
+
+  function isGoogleExternalResult(href: string) {
+    if (!href) return false;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(href, 'https://www.google.com');
+    } catch {
+      return false;
+    }
+
+    const normalizedHref = parsed.toString().toLowerCase();
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const path = parsed.pathname.toLowerCase();
+
+    if (normalizedHref.startsWith('javascript:')) return false;
+    if (path === '/search' || path === '/preferences' || path === '/advanced_search') return false;
+    if (host === 'accounts.google.com' || host === 'support.google.com') return false;
+    if (host === 'google.com' || host.endsWith('.google.com')) return false;
+
+    return /^https?:/.test(parsed.protocol);
+  }
+
   const pack = getSitePackForHost(input.tabUrl);
   if (!pack) {
     return {
@@ -33,17 +63,40 @@ export async function resolveFromStarterPack(input: {
   }
 
   const attempts: any[] = [];
+  const host = normalizeHost(input.tabUrl);
 
   for (const selector of target.selectors) {
     try {
       const result = await input.runQuery(selector);
-      const element = result?.elements?.[0];
+      const elements = Array.isArray(result?.elements) ? result.elements : [];
+      let element = elements[0];
+      let resolvedSelector = selector;
+
+      if (host === 'google.com' && (target.targetKey === 'first_result' || target.targetKey === 'result_links')) {
+        const candidateIndex = elements.findIndex((item: any) => {
+          const href = String(item?.attributes?.href || '');
+          return item?.visible && item?.interactable && isGoogleExternalResult(href);
+        });
+
+        if (candidateIndex >= 0) {
+          element = elements[candidateIndex];
+          const href = String(element?.attributes?.href || '').replace(/"/g, '\\"');
+          const concreteSelector = href ? `a[href="${href}"]` : '';
+          if (concreteSelector) {
+            resolvedSelector = concreteSelector;
+          }
+        } else {
+          element = undefined;
+        }
+      }
 
       attempts.push({
         selector,
+        resolvedSelector,
         found: Boolean(element),
         visible: Boolean(element?.visible),
         enabled: Boolean(element?.interactable),
+        href: element?.attributes?.href || '',
       });
 
       if (element?.visible && element?.interactable) {
@@ -56,7 +109,7 @@ export async function resolveFromStarterPack(input: {
             targetId: `starter_${target.targetKey}`,
             kind: target.kind || element.kind || input.kind || 'card',
             label: element.text || target.targetKey,
-            selector,
+            selector: resolvedSelector,
             bbox: element.bbox,
             visible: element.visible,
             enabled: element.interactable,
