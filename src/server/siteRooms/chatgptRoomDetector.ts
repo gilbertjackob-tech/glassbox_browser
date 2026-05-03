@@ -45,6 +45,7 @@ export async function detectChatGptRoom(input: {
         userMessageCount: userMessages.length,
         hasConversationList: Boolean(document.querySelector('nav a[href^="/c/"], a[href^="/c/"]')),
         hasAuthButtons: Boolean(document.querySelector('button[data-testid="login-button"], button[data-testid="signup-button"], a[href*="/auth/login"], a[href*="/auth/signup"]')),
+        hasAuthText: /log in|login|sign up|get started/i.test(document.body?.innerText || ''),
         titleSample: document.title || '',
       };
     })();
@@ -77,6 +78,7 @@ export async function detectChatGptRoom(input: {
   const userCount = Number((domSignals?.result || {}).userMessageCount || 0);
   const hasPromptBox = Boolean((domSignals?.result || {}).hasPromptBox);
   const hasAuthButtons = Boolean((domSignals?.result || {}).hasAuthButtons);
+  const hasAuthText = Boolean((domSignals?.result || {}).hasAuthText);
 
   if ((path.startsWith('/c/') || assistantCount > 0 || userCount > 0) && hasPromptBox) {
     room = 'chatgpt_chat';
@@ -98,8 +100,13 @@ export async function detectChatGptRoom(input: {
       landmark('new_chat_button', { optional: true }),
       landmark('conversation_list', { optional: true }),
     ];
-  } else if (path.startsWith('/auth/') || hasAuthButtons) {
-    confidence = path.startsWith('/auth/') ? 0.85 : 0.7;
+  } else if ((path.startsWith('/auth/') || hasAuthButtons || hasAuthText) && !hasPromptBox) {
+    room = 'chatgpt_auth';
+    confidence = 0.95;
+    landmarks = [
+      landmark('login_button', { guarded: true, optional: true }),
+      landmark('signup_button', { guarded: true, optional: true }),
+    ];
   }
 
   const resolvedLandmarks: RoomLandmark[] = [];
@@ -139,7 +146,9 @@ export async function detectChatGptRoom(input: {
     title: input.title,
     signals,
     landmarks: resolvedLandmarks,
-    reason: room === 'chatgpt_unknown' && (path.startsWith('/auth/') || hasAuthButtons)
+    reason: room === 'chatgpt_auth'
+      ? 'AUTH_REQUIRED'
+      : room === 'chatgpt_unknown' && (path.startsWith('/auth/') || hasAuthButtons || hasAuthText)
       ? 'AUTH_REQUIRED'
       : undefined,
   };

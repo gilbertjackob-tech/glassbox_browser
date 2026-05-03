@@ -45,6 +45,32 @@ export const chatgptPack: SiteStarterPack = {
       },
     },
     {
+      targetKey: 'login_button',
+      kind: 'button',
+      selectors: [
+        'button[data-testid="login-button"]',
+        'a[href*="/auth/login"]',
+        'button',
+      ],
+      actions: ['click'],
+      verify: {
+        domChanged: true,
+      },
+    },
+    {
+      targetKey: 'signup_button',
+      kind: 'button',
+      selectors: [
+        'button[data-testid="signup-button"]',
+        'a[href*="/auth/signup"]',
+        'button',
+      ],
+      actions: ['click'],
+      verify: {
+        domChanged: true,
+      },
+    },
+    {
       targetKey: 'last_assistant_message',
       kind: 'card',
       selectors: [

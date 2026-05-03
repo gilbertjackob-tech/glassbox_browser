@@ -107,6 +107,7 @@ async function main() {
   const authRequired =
     room.reason === 'AUTH_REQUIRED' ||
     suggestions.reason === 'AUTH_REQUIRED' ||
+    room.room === 'chatgpt_auth' ||
     suggestions.suggestions?.some((item) =>
       item.guarded === true && /requires login/i.test(String(item.reason || ''))
     );
@@ -123,6 +124,7 @@ async function main() {
   }
 
   const roomOk =
+    room.room === 'chatgpt_auth' ||
     room.room === 'chatgpt_home' ||
     room.room === 'chatgpt_chat' ||
     authRequired;

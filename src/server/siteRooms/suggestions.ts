@@ -234,12 +234,12 @@ export function getGitHubRoomSuggestions(room: SiteRoomResult): RoomSuggestion[]
 export function getChatGptRoomSuggestions(room: SiteRoomResult): RoomSuggestion[] {
   const suggestions: RoomSuggestion[] = [];
 
-  if (room.room === 'chatgpt_unknown' && room.reason === 'AUTH_REQUIRED') {
+  if (room.room === 'chatgpt_auth') {
     suggestions.push({
       type: 'info',
       safe: false,
       guarded: true,
-      reason: 'ChatGPT requires login before prompt actions are available in this environment.',
+      reason: 'ChatGPT login is required. Login manually in this profile first, then rerun ChatGPT automation.',
     });
     return suggestions;
   }

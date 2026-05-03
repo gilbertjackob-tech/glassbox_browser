@@ -1,4 +1,5 @@
 export type SiteRoomName =
+  | 'chatgpt_auth'
   | 'chatgpt_home'
   | 'chatgpt_chat'
   | 'chatgpt_unknown'

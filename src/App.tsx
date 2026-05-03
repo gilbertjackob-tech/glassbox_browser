@@ -429,12 +429,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab && activeTab.url !== 'about:blank' && !isNavigating) {
+    const isAddressBarFocused = typeof document !== 'undefined' && document.activeElement === urlInputRef.current;
+
+    if (activeTab && activeTab.url !== 'about:blank' && !isNavigating && !isAddressBarFocused) {
       setUrlInput(activeTab.url);
     } else if (!activeTab) {
       setUrlInput('');
     }
   }, [activeTab?.url, isNavigating]);
+
+  useEffect(() => {
+    if (!activeProfileId) return;
+
+    const intervalId = window.setInterval(() => {
+      void fetchTabs(activeProfileId, activeTabId);
+    }, 1500);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeProfileId, activeTabId]);
 
   useEffect(() => {
     if (!activeTabId) {
