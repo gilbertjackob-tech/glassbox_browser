@@ -20,6 +20,7 @@ import {
   saveMicroSkill,
 } from './skillService.js';
 import { detectSiteRoom } from './siteRooms/index.js';
+import { getYouTubeRoomSuggestions } from './siteRooms/suggestions.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -559,6 +560,41 @@ export const vlmPageApi = {
     }
 
     return result;
+  },
+
+  async getSiteRoomSuggestions(tabId: string) {
+    const room = await this.getSiteRoom(tabId);
+
+    if (!room.ok) {
+      return {
+        ok: false,
+        room,
+        suggestions: [],
+        reason: room.reason || 'ROOM_NOT_DETECTED',
+      };
+    }
+
+    if (room.site === 'youtube') {
+      return {
+        ok: true,
+        site: room.site,
+        room: room.room,
+        confidence: room.confidence,
+        url: room.url,
+        suggestions: getYouTubeRoomSuggestions(room),
+        landmarks: room.landmarks,
+      };
+    }
+
+    return {
+      ok: true,
+      site: room.site,
+      room: room.room,
+      confidence: room.confidence,
+      url: room.url,
+      suggestions: [],
+      landmarks: room.landmarks,
+    };
   },
 
   async resolveTarget(tabId: string, body: any) {

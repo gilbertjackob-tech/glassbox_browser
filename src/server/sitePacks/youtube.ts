@@ -235,5 +235,20 @@ export const youtubePack: SiteStarterPack = {
         },
       ],
     },
+    {
+      name: 'youtube_pause_or_play_video',
+      queryPattern: 'pause or play youtube video',
+      steps: [
+        {
+          name: 'toggle play pause',
+          targetKey: 'play_pause_button',
+          kind: 'button',
+          action: 'click',
+          verify: {
+            domChanged: true,
+          },
+        },
+      ],
+    },
   ],
 };
