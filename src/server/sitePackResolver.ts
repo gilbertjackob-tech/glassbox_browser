@@ -36,6 +36,46 @@ export async function resolveFromStarterPack(input: {
     return /^https?:/.test(parsed.protocol);
   }
 
+  function isGitHubUsefulResult(href: string) {
+    if (!href) return false;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(href, 'https://github.com');
+    } catch {
+      return false;
+    }
+
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (host !== 'github.com') return false;
+
+    const path = parsed.pathname;
+    const parts = path.split('/').filter(Boolean);
+
+    if (parts.length < 2) return false;
+
+    const blockedFirst = new Set([
+      'login',
+      'signup',
+      'features',
+      'pricing',
+      'search',
+      'topics',
+      'trending',
+      'marketplace',
+      'explore',
+      'settings',
+      'notifications',
+      'pulls',
+      'issues',
+    ]);
+
+    if (blockedFirst.has(parts[0])) return false;
+    if (parsed.hash && !parsed.search && parts.length < 2) return false;
+
+    return true;
+  }
+
   const pack = getSitePackForHost(input.tabUrl);
   if (!pack) {
     return {
@@ -76,6 +116,24 @@ export async function resolveFromStarterPack(input: {
         const candidateIndex = elements.findIndex((item: any) => {
           const href = String(item?.attributes?.href || '');
           return item?.visible && item?.interactable && isGoogleExternalResult(href);
+        });
+
+        if (candidateIndex >= 0) {
+          element = elements[candidateIndex];
+          const href = String(element?.attributes?.href || '').replace(/"/g, '\\"');
+          const concreteSelector = href ? `a[href="${href}"]` : '';
+          if (concreteSelector) {
+            resolvedSelector = concreteSelector;
+          }
+        } else {
+          element = undefined;
+        }
+      }
+
+      if (host === 'github.com' && target.targetKey === 'first_search_result') {
+        const candidateIndex = elements.findIndex((item: any) => {
+          const href = String(item?.attributes?.href || '');
+          return item?.visible && item?.interactable && isGitHubUsefulResult(href);
         });
 
         if (candidateIndex >= 0) {

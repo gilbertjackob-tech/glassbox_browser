@@ -1,3 +1,4 @@
+import { detectGitHubRoom } from './githubRoomDetector.js';
 import { detectGoogleRoom } from './googleRoomDetector.js';
 import { detectYouTubeRoom } from './youtubeRoomDetector.js';
 import type { SiteRoomResult } from './types.js';
@@ -24,6 +25,10 @@ export async function detectSiteRoom(input: {
 
   if (host === 'google.com' || host.endsWith('.google.com')) {
     return detectGoogleRoom(input);
+  }
+
+  if (host === 'github.com') {
+    return detectGitHubRoom(input);
   }
 
   return null;

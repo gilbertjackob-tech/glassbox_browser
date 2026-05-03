@@ -1,4 +1,10 @@
 export type SiteRoomName =
+  | 'github_home'
+  | 'github_repo'
+  | 'github_search_results'
+  | 'github_issues'
+  | 'github_pulls'
+  | 'github_unknown'
   | 'google_home'
   | 'google_search_results'
   | 'google_unknown'

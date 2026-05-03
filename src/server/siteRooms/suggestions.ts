@@ -164,3 +164,69 @@ export function getGoogleRoomSuggestions(room: SiteRoomResult): RoomSuggestion[]
 
   return suggestions;
 }
+
+export function getGitHubRoomSuggestions(room: SiteRoomResult): RoomSuggestion[] {
+  const suggestions: RoomSuggestion[] = [];
+
+  if (room.room === 'github_home') {
+    suggestions.push({
+      type: 'skill',
+      name: 'github_search',
+      safe: true,
+      inputs: ['query'],
+      reason: 'GitHub home has global search.',
+    });
+  }
+
+  if (room.room === 'github_repo') {
+    suggestions.push({
+      type: 'skill',
+      name: 'github_open_issues',
+      safe: true,
+      reason: 'Repository room can open the Issues tab.',
+    });
+
+    suggestions.push({
+      type: 'skill',
+      name: 'github_open_pulls',
+      safe: true,
+      reason: 'Repository room can open the Pull requests tab.',
+    });
+  }
+
+  if (room.room === 'github_search_results') {
+    suggestions.push({
+      type: 'skill',
+      name: 'github_open_first_search_result',
+      safe: true,
+      reason: 'Search results room can open the first result.',
+    });
+  }
+
+  if (room.room === 'github_issues') {
+    suggestions.push({
+      type: 'skill',
+      name: 'github_open_pulls',
+      safe: true,
+      reason: 'Issues room can navigate to Pull requests tab.',
+    });
+  }
+
+  if (room.room === 'github_pulls') {
+    suggestions.push({
+      type: 'skill',
+      name: 'github_open_issues',
+      safe: true,
+      reason: 'Pull requests room can navigate to Issues tab.',
+    });
+  }
+
+  suggestions.push({
+    type: 'info',
+    safe: false,
+    guarded: true,
+    reason: 'Creating issues, PRs, comments, merges, stars, and deletes are guarded actions and are not enabled in this fast pack.',
+  });
+
+  return suggestions;
+}

@@ -20,7 +20,7 @@ import {
   saveMicroSkill,
 } from './skillService.js';
 import { detectSiteRoom } from './siteRooms/index.js';
-import { getGoogleRoomSuggestions, getYouTubeRoomSuggestions } from './siteRooms/suggestions.js';
+import { getGitHubRoomSuggestions, getGoogleRoomSuggestions, getYouTubeRoomSuggestions } from './siteRooms/suggestions.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -644,6 +644,18 @@ export const vlmPageApi = {
         confidence: room.confidence,
         url: room.url,
         suggestions: getGoogleRoomSuggestions(room),
+        landmarks: room.landmarks,
+      };
+    }
+
+    if (room.site === 'github') {
+      return {
+        ok: true,
+        site: room.site,
+        room: room.room,
+        confidence: room.confidence,
+        url: room.url,
+        suggestions: getGitHubRoomSuggestions(room),
         landmarks: room.landmarks,
       };
     }
