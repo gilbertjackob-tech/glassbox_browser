@@ -530,6 +530,14 @@ export function startApiServer(port: number = 3000): Promise<void> {
       }
     });
 
+    app.post('/api/tabs/:id/site-room/run-suggestion', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.runSiteRoomSuggestion(req.params.id, req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
     app.post('/api/tabs/:id/resolve-target', async (req, res) => {
       try {
         res.json(await vlmPageApi.resolveTarget(req.params.id, req.body || {}));

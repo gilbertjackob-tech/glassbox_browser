@@ -597,6 +597,85 @@ export const vlmPageApi = {
     };
   },
 
+  async runSiteRoomSuggestion(tabId: string, body: any) {
+    const suggestionsResult = await this.getSiteRoomSuggestions(tabId);
+
+    if (!suggestionsResult.ok) {
+      return {
+        ok: false,
+        reason: suggestionsResult.reason || 'ROOM_SUGGESTIONS_NOT_AVAILABLE',
+        suggestionsResult,
+      };
+    }
+
+    const requestedName =
+      typeof body?.name === 'string'
+        ? body.name
+        : typeof body?.skill === 'string'
+          ? body.skill
+          : '';
+
+    const requestedTargetKey =
+      typeof body?.targetKey === 'string'
+        ? body.targetKey
+        : '';
+
+    if (!requestedName && !requestedTargetKey) {
+      throw new Error('SUGGESTION_NAME_OR_TARGET_REQUIRED');
+    }
+
+    const suggestions = Array.isArray(suggestionsResult.suggestions)
+      ? suggestionsResult.suggestions
+      : [];
+
+    const suggestion = suggestions.find((item: any) => {
+      if (requestedName) {
+        return item.type === 'skill' && item.name === requestedName;
+      }
+
+      if (requestedTargetKey) {
+        return item.targetKey === requestedTargetKey;
+      }
+
+      return false;
+    });
+
+    if (!suggestion) {
+      return {
+        ok: false,
+        reason: 'SUGGESTION_NOT_FOUND_IN_CURRENT_ROOM',
+        requestedName,
+        requestedTargetKey,
+        room: suggestionsResult.room,
+        suggestions,
+      };
+    }
+
+    if (suggestion.type !== 'skill' || suggestion.safe !== true || suggestion.guarded === true) {
+      return {
+        ok: false,
+        reason: 'SUGGESTION_NOT_SAFE_OR_NOT_EXECUTABLE',
+        suggestion,
+        room: suggestionsResult.room,
+      };
+    }
+
+    const runResult = await this.runMicroSkill(tabId, {
+      skill: suggestion.name,
+      inputs: body?.inputs && typeof body.inputs === 'object' ? body.inputs : {},
+      stopOnFailure: body?.stopOnFailure !== false,
+      maxSteps: body?.maxSteps,
+    });
+
+    return {
+      ok: Boolean(runResult.ok),
+      site: suggestionsResult.site,
+      room: suggestionsResult.room,
+      suggestion,
+      runResult,
+    };
+  },
+
   async resolveTarget(tabId: string, body: any) {
     const tab = getTabOrThrow(tabId);
 
