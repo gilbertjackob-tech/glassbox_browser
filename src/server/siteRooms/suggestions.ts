@@ -288,3 +288,61 @@ export function getChatGptRoomSuggestions(room: SiteRoomResult): RoomSuggestion[
 
   return suggestions;
 }
+
+export function getGeminiRoomSuggestions(room: SiteRoomResult): RoomSuggestion[] {
+  const suggestions: RoomSuggestion[] = [];
+
+  if (room.room === 'gemini_auth') {
+    suggestions.push({
+      type: 'info',
+      safe: false,
+      guarded: true,
+      reason: 'Gemini login is required. Login manually in this profile first, then rerun Gemini automation.',
+    });
+    return suggestions;
+  }
+
+  if (room.room === 'gemini_home') {
+    suggestions.push({
+      type: 'skill',
+      name: 'gemini_send_prompt',
+      safe: true,
+      inputs: ['prompt'],
+      reason: 'Gemini home has a prompt box.',
+    });
+  }
+
+  if (room.room === 'gemini_chat') {
+    suggestions.push({
+      type: 'skill',
+      name: 'gemini_send_prompt',
+      safe: true,
+      inputs: ['prompt'],
+      reason: 'Current Gemini chat has a prompt box for follow-up prompts.',
+    });
+
+    suggestions.push({
+      type: 'skill',
+      name: 'gemini_new_chat',
+      safe: true,
+      reason: 'Starting a new Gemini chat is a safe navigation action.',
+    });
+
+    suggestions.push({
+      type: 'info',
+      safe: false,
+      guarded: true,
+      reason: 'File upload, image upload, voice or mic, deleting chats, sharing, extensions, and account settings are guarded and disabled in this fast pack.',
+    });
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push({
+      type: 'info',
+      safe: true,
+      reason: 'No Gemini room-specific suggestions available yet.',
+    });
+  }
+
+  return suggestions;
+}

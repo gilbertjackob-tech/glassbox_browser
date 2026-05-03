@@ -22,6 +22,7 @@ import {
 import { detectSiteRoom } from './siteRooms/index.js';
 import {
   getChatGptRoomSuggestions,
+  getGeminiRoomSuggestions,
   getGitHubRoomSuggestions,
   getGoogleRoomSuggestions,
   getYouTubeRoomSuggestions,
@@ -629,6 +630,18 @@ export const vlmPageApi = {
         url: room.url,
         reason: room.reason,
         suggestions: getChatGptRoomSuggestions(room),
+        landmarks: room.landmarks,
+      };
+    }
+
+    if (room.site === 'gemini') {
+      return {
+        ok: true,
+        site: room.site,
+        room: room.room,
+        confidence: room.confidence,
+        url: room.url,
+        suggestions: getGeminiRoomSuggestions(room),
         landmarks: room.landmarks,
       };
     }

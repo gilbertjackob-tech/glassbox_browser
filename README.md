@@ -1,53 +1,379 @@
-# GlassBox Browser (MVP)
+# GlassBox Browser
 
-An automation-native browser shell where the agent is the user. GlassBox provides deep transparency into DOM, session memory, and action verification.
+GlassBox is a Windows-first Electron browser shell built for visible, verifiable browser automation. It keeps the real page on screen inside an Electron `BrowserView`, exposes a local API for DOM/query/action workflows, and records action evidence in local SQLite storage.
 
-## 🚀 Key Features
-- **Native Browser Control**: Each tab is a visible Electron BrowserView. The agent controls the live GUI window - nothing runs headlessly.
-- **GlassBox DOM**: Every element is inspected for role, text, and bounding box.
-- **Action Contracts**: "No success without evidence". Every action (click/type) is verified and logged to a SQLite memory database.
-- **Profile Partitioning**: SQLite-driven profiles with isolated sessions.
-- **Shortcut Registry**: Keyboard shortcuts are grouped by Navigation, Tabs, Profiles, Settings, Utility Panels, Automation, Safety, and Command, with a CLI-equivalent string for each command.
-- **Technical UI**: A high-density "Mission Control" interface for monitoring automation.
+The project is designed around one rule:
 
-## 📁 Architecture
-- `src/main/main.ts`: Electron entry point and visible window lifecycle.
-- `src/main/apiServer.ts`: Local Express API server.
-- `src/server/tabManager.ts`: Lifecycle management for visible Electron BrowserView tabs.
-- `src/server/vlmPageApi.ts`: Glass-box perception and VLM action API.
-- `src/main/memoryDb.ts`: Core SQLite persistence for GlassBox memory.
-- `src/lib/shortcuts.ts`: Default shortcut registry, parser, formatter, and conflict detection helpers.
-- `src/App.tsx`: React-based control shell.
+```txt
+No success without evidence.
+```
 
-## 💾 Local Memory (SQLite)
-GlassBox uses a local SQLite database for persistent intelligence. No cloud or remote storage is used.
+Actions are not treated as successful just because an input event was sent. GlassBox resolves a target, performs the action, verifies the resulting state change, and stores the result locally.
 
-- **Database Path**: `data/glassbox.sqlite`
-- **How to Reset**: Delete the `data/glassbox.sqlite` file to clear all history, profiles, skills, and logs.
-- **What is stored**:
-  - Profiles & Tab sessions
-  - Navigation History (URL, Title, Visit Count)
-  - DOM Snapshots (only when changes occur)
-  - Action Logs (Verified successes and failure reasons)
-  - Tasks & Skills (Learned sequences based on successful tasks)
-  - Downloads metadata
+## Current scope
 
-## 🛠️ API Endpoints
-- `GET /api/tabs`: List active browser tabs.
-- `POST /api/tabs`: Create a new tab in a profile, with optional `{ profileId, url }`.
-- `PUT /api/tabs/:tabId/focus`: Bring a tab to the visible BrowserView.
-- `GET /api/tabs/:tabId/dom`: Get the latest GlassBox DOM snapshot.
-- `GET /api/tabs/:tabId/html`: Get the live page HTML from `document.documentElement.outerHTML`.
-- `POST /api/tabs/:tabId/query`: Query live elements by CSS selector or XPath with bounding boxes.
-- `GET /api/tabs/:tabId/screenshot`: Capture the visible page as PNG.
-- `POST /api/tabs/:tabId/style`: Read selected computed styles.
-- `GET /api/tabs/:tabId/a11y`: Get a lightweight semantic accessibility-style snapshot.
-- `POST /api/tabs/:tabId/action/*`: Click, type, scroll, navigate, wait, or evaluate in a tab.
-- `POST /api/actions`: Execute an **Action Contract**.
-- `GET /api/memory/search?q=...&profileId=...`: Unified memory search across history, tasks, skills, and downloads.
+Implemented and live in the repo:
 
-## CLI Control
-Use the local CLI for profile-based automation:
+- Visible Electron browser tabs with profile-isolated sessions
+- Local Express API for tab control, DOM inspection, action execution, skills, site packs, and room-aware suggestions
+- Target resolution flow: memory -> starter pack -> scan
+- Verified action execution by target
+- Sequential action chains
+- Micro-skill save, list, and replay
+- Site-room detection and room-specific suggestions
+- Safe suggestion execution through saved skills only
+- Fast packs for:
+  - Google Search
+  - YouTube
+  - GitHub
+  - ChatGPT
+  - Gemini
+
+## Stack
+
+- Electron
+- React
+- TypeScript
+- Vite
+- Express
+- SQLite via `better-sqlite3`
+
+## Project layout
+
+- [src/main/main.ts](p:/Hasnat/mirror_browser/src/main/main.ts): Electron entrypoint and shell wiring
+- [src/main/apiServer.ts](p:/Hasnat/mirror_browser/src/main/apiServer.ts): local HTTP API
+- [src/server/tabManager.ts](p:/Hasnat/mirror_browser/src/server/tabManager.ts): BrowserView tab lifecycle and profile session handling
+- [src/server/vlmPageApi.ts](p:/Hasnat/mirror_browser/src/server/vlmPageApi.ts): DOM/query/action/skill/site-room server logic
+- [src/server/sitePacks](p:/Hasnat/mirror_browser/src/server/sitePacks): starter packs for supported sites
+- [src/server/siteRooms](p:/Hasnat/mirror_browser/src/server/siteRooms): room detectors and room suggestions
+- [src/server/skillService.ts](p:/Hasnat/mirror_browser/src/server/skillService.ts): micro-skill persistence and rendering
+- [src/server/targetMemoryService.ts](p:/Hasnat/mirror_browser/src/server/targetMemoryService.ts): target memory
+- [src/main/memoryDb.ts](p:/Hasnat/mirror_browser/src/main/memoryDb.ts): SQLite schema and DB bootstrap
+- [src/App.tsx](p:/Hasnat/mirror_browser/src/App.tsx): React shell
+
+## Local storage
+
+GlassBox stores everything locally.
+
+- Database path: `data/glassbox.sqlite`
+- Profile/browser runtime data: `userData/`, `Partitions/`, `Cookies`, `Local Storage/`, `IndexedDB/`, `Session Storage/`
+- Encrypted full-profile backup extension: `.gbprofile`
+
+Stored data includes:
+
+- profiles
+- tabs
+- browsing history
+- downloads metadata
+- saved credentials
+- action logs
+- target memory
+- micro-skills
+
+To reset local memory, remove `data/glassbox.sqlite`. To clear a profile’s browser state, remove its persisted Electron profile storage.
+
+## Profiles
+
+Profiles are isolated Electron session partitions.
+
+- cookies and session state stay separated by profile
+- history, downloads, action logs, and saved credentials are profile-scoped
+- the default profile can exist without an attached email
+- non-default profiles can detect a Google account email after manual login
+
+Important:
+
+- GlassBox profiles are not Chrome profiles
+- Chrome sync/import is not implemented
+- login persistence depends on the website and its own security rules
+
+## Running locally
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Run the renderer dev server only:
+
+```powershell
+npm run renderer:dev
+```
+
+Run the full Electron app in dev mode:
+
+```powershell
+npm run electron:dev
+```
+
+Build:
+
+```powershell
+npm run build
+```
+
+Typecheck:
+
+```powershell
+npm run lint
+```
+
+## Local API
+
+The local API is served by the Electron main process on `http://127.0.0.1:3000`.
+
+### Profiles and settings
+
+- `GET /api/profiles`
+- `POST /api/profiles`
+- `PATCH /api/profiles/:id`
+- `DELETE /api/profiles/:id`
+- `POST /api/profiles/:id/open`
+- `POST /api/profiles/:id/detect-email`
+- `POST /api/profiles/export-full`
+- `POST /api/profiles/import-full`
+- `GET /api/settings`
+- `PUT /api/settings`
+
+### Skills and site packs
+
+- `GET /api/skills`
+- `POST /api/skills`
+- `GET /api/site-packs`
+- `GET /api/site-packs/:host`
+- `POST /api/site-packs/:host/install-skills`
+
+### Tabs and inspection
+
+- `GET /api/tabs`
+- `POST /api/tabs`
+- `DELETE /api/tabs/:id`
+- `PUT /api/tabs/:id/focus`
+- `GET /api/tabs/:id/dom`
+- `GET /api/tabs/:id/html`
+- `POST /api/tabs/:id/query`
+- `GET /api/tabs/:id/screenshot`
+- `POST /api/tabs/:id/style`
+- `GET /api/tabs/:id/a11y`
+- `GET /api/tabs/:id/action-targets`
+- `GET /api/tabs/:id/state`
+- `POST /api/tabs/:id/action/evaluate`
+
+### Target resolution and verified actions
+
+- `POST /api/tabs/:id/resolve-target`
+- `POST /api/tabs/:id/action/by-target`
+- `POST /api/tabs/:id/action/resolve-and-act`
+- `POST /api/tabs/:id/action/run-chain`
+- `POST /api/tabs/:id/skills/run`
+- `POST /api/tabs/:id/site-room/run-suggestion`
+- `POST /api/tabs/:id/memory/resolve-target`
+- `POST /api/tabs/:id/action/click`
+- `POST /api/tabs/:id/action/type`
+- `POST /api/tabs/:id/action/scroll`
+- `POST /api/tabs/:id/action/navigate`
+- `POST /api/tabs/:id/action/wait`
+- `POST /api/actions`
+
+### Room awareness and suggestions
+
+- `GET /api/tabs/:id/site-room`
+- `GET /api/tabs/:id/site-room/suggestions`
+
+### Memory and credentials
+
+- `GET /api/memory/targets`
+- `GET /api/memory/search`
+- `GET /api/memory/history`
+- `DELETE /api/memory/history`
+- `GET /api/memory/downloads`
+- `DELETE /api/memory/downloads`
+- `GET /api/memory/logs`
+- `GET /api/passwords`
+- `POST /api/passwords`
+- `DELETE /api/passwords/:id`
+
+## Verified action model
+
+GlassBox separates these layers:
+
+1. Target discovery
+2. Target memory
+3. Starter-pack fallback
+4. Safe action execution
+5. Post-action verification
+6. Evidence logging
+
+Current important flows:
+
+- `resolveTarget()`:
+  - target memory first
+  - starter pack second
+  - generic scan fallback last
+- `actionResolveAndAct()`:
+  - resolves target
+  - executes action
+  - verifies outcome
+- `runActionChain()`:
+  - validates all steps first
+  - runs sequentially
+  - stops on failure by default
+- `runMicroSkill()`:
+  - loads a saved skill
+  - renders placeholders from runtime inputs
+  - replays it through `runActionChain()`
+
+## Starter packs
+
+Starter packs are hints, not blind automation rules.
+
+Each pack defines:
+
+- target aliases/selectors
+- allowed action shapes
+- starter micro-skills
+
+Current packs:
+
+- Google Search
+- YouTube
+- GitHub
+- ChatGPT
+- Gemini
+
+Starter packs are used only after target memory fails. A pack target must still be verified against the live DOM before use.
+
+## Site rooms
+
+GlassBox can classify supported sites into room/page types and then suggest safe next steps.
+
+### Google
+
+- `google_home`
+- `google_search_results`
+- `google_unknown`
+
+Safe skills:
+
+- `google_search`
+- `google_open_first_result`
+- `google_search_and_open_first`
+
+### YouTube
+
+- `youtube_home`
+- `youtube_search_results`
+- `youtube_watch_page`
+- `youtube_channel_page`
+- `youtube_unknown`
+
+Safe skills:
+
+- `youtube_search`
+- `youtube_open_first_result`
+- `youtube_search_and_open_first`
+- `youtube_pause_or_play_video`
+
+Guarded targets:
+
+- `like_button`
+- `subscribe_button`
+- `comment_box`
+
+### GitHub
+
+- `github_home`
+- `github_repo`
+- `github_search_results`
+- `github_issues`
+- `github_pulls`
+- `github_unknown`
+
+Safe skills:
+
+- `github_search`
+- `github_open_issues`
+- `github_open_pulls`
+- `github_open_first_search_result`
+
+Guarded/disabled for the fast pack:
+
+- issue creation
+- PR creation
+- comments
+- merges
+- stars/follows
+- deletes
+
+### ChatGPT
+
+- `chatgpt_auth`
+- `chatgpt_home`
+- `chatgpt_chat`
+- `chatgpt_unknown`
+
+Safe skills:
+
+- `chatgpt_send_prompt`
+- `chatgpt_new_chat`
+
+Guarded/disabled:
+
+- login automation
+- settings/memory changes
+- uploads
+- voice mode
+- workspace/billing actions
+
+### Gemini
+
+- `gemini_auth`
+- `gemini_home`
+- `gemini_chat`
+- `gemini_unknown`
+
+Safe skills:
+
+- `gemini_send_prompt`
+- `gemini_new_chat`
+
+Guarded/disabled:
+
+- login automation
+- uploads
+- voice/mic actions
+- sharing/deletes
+- account/workspace/billing actions
+
+## Room-aware suggestions
+
+`GET /api/tabs/:id/site-room/suggestions` returns room-aware suggestions only. It does not act.
+
+`POST /api/tabs/:id/site-room/run-suggestion` executes only suggestions that are:
+
+- `type: "skill"`
+- `safe: true`
+- not guarded
+
+Guarded targets such as YouTube like/subscribe or auth-only actions are refused.
+
+## Micro-skills
+
+Saved micro-skills are stored in the existing `skills` table.
+
+Supported behavior:
+
+- save a skill directly with `POST /api/skills`
+- save a successful chain as a skill
+- list saved skills
+- fetch and replay a skill by name or id
+- render placeholder inputs like `{{query}}` or `{{prompt}}`
+- increment `success_count` and `failure_count`
+
+## CLI
+
+The repo includes a local CLI:
 
 ```powershell
 npm run gb -- profile list
@@ -58,87 +384,96 @@ npm run gb -- click --tab <tabId> --sel "button.login"
 npm run gb -- type --tab <tabId> --sel "input[name='email']" --text "user@example.com"
 ```
 
-Profiles are local-only and isolated by Electron persistent session partition. Existing old partition data is not auto-migrated.
-GlassBox profiles are Electron profiles, not real Chrome profiles. Login cookies and session data persist per GlassBox profile, but Chrome browser sync/import is not implemented.
+## Keyboard shortcuts and shell UX
 
-## Keyboard Shortcuts
-GlassBox includes a registry-backed keyboard shortcut system with command IDs and CLI-equivalent strings for future routing parity.
+The app includes:
 
-- Open `Settings -> Keyboard Shortcuts` to search, filter, edit, reset individual shortcuts, or reset all shortcuts.
-- Shortcuts are stored locally first in `localStorage` under `gb-shortcuts`.
-- Conflicts are detected before replacing an existing shortcut.
+- editable keyboard shortcuts
+- command palette
+- settings subpages
+- utility panels
+- profile creation and email detection
+- encrypted full-profile backup/restore
+- shell-level address bar, tabs, and navigation controls
 
-Default shortcut groups:
-- Navigation: `Ctrl+L`, `Ctrl+K`, `Alt+Left`, `Alt+Right`, `Ctrl+R`, `Ctrl+Shift+R`, `Esc`
-- Tabs: `Ctrl+T`, `Ctrl+W`, `Ctrl+Shift+T`, `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Alt+1..9`
-- Profiles: `Ctrl+Shift+P`, `Ctrl+Alt+P`, `Ctrl+Alt+E`, `Ctrl+Alt+B`, `Ctrl+Alt+N`, `Ctrl+Alt+0`
-- Settings: `Ctrl+,`, `Ctrl+Alt+1..8`
-- Utility Panels: `Ctrl+Shift+M`, `Ctrl+Shift+H`, `Ctrl+Shift+J`, `Ctrl+Shift+O`, `Ctrl+Shift+A`, `Ctrl+Shift+U`
-- Automation: `Ctrl+Alt+D`, `Ctrl+Alt+H`, `Ctrl+Alt+S`, `Ctrl+Alt+A`, `Ctrl+Alt+Q`, `Ctrl+Alt+X`, `Ctrl+Alt+C`, `Ctrl+Alt+V`, `Ctrl+Alt+R`, `Ctrl+Alt+L`
-- Safety: `Ctrl+Alt+Esc`, `Ctrl+Alt+Space`, `Ctrl+Alt+Backspace`, `Ctrl+Alt+Z`
-- Command palette: `Ctrl+Shift+K`
+## Test scripts
 
-## Command Palette
-Press `Ctrl+Shift+K` to open the command palette. It lets you search and run registered commands such as:
+The repo includes API-level verification scripts under [scripts](p:/Hasnat/mirror_browser/scripts).
 
-- `new tab`
-- `detect profile email`
-- `capture dom`
-- `backup profile`
-- `open settings`
+Core progression scripts:
 
-## Browser Zoom
-GlassBox applies zoom to the whole visible browsing surface, including Electron `BrowserView` tabs.
+- `test-action-targets.mjs`
+- `test-action-by-target.mjs`
+- `test-action-verification.mjs`
+- `test-target-memory.mjs`
+- `test-memory-first-resolve.mjs`
+- `test-resolve-and-act.mjs`
+- `test-run-chain.mjs`
+- `test-run-chain-failure.mjs`
+- `test-save-micro-skill.mjs`
+- `test-run-micro-skill.mjs`
+- `test-run-micro-skill-failure.mjs`
+- `test-run-micro-skill-fail-count.mjs`
+- `test-site-packs.mjs`
+- `test-site-pack-resolve.mjs`
+- `test-site-pack-install-skills.mjs`
 
-- `Shift + +`: zoom in
-- `Shift + -`: zoom out
-- `Ctrl + mouse wheel`: zoom in or out
-- `Ctrl/Cmd + 0`: reset zoom
+Site fast-pack scripts:
 
-## Full Profile Backup
-GlassBox supports encrypted full profile backups using `.gbprofile` files.
+- `test-google-fast-pack.mjs`
+- `test-youtube-target-map.mjs`
+- `test-youtube-watch-actions.mjs`
+- `test-youtube-skill-replay.mjs`
+- `test-youtube-room-map.mjs`
+- `test-youtube-room-suggestions.mjs`
+- `test-youtube-run-safe-suggestion.mjs`
+- `test-github-fast-pack.mjs`
+- `test-chatgpt-fast-pack.mjs`
+- `test-gemini-fast-pack.mjs`
 
-A full backup can include:
-- profile metadata
-- history
-- downloads metadata
-- saved GlassBox passwords
-- action logs
-- tabs metadata
-- Electron persistent session files where possible, including cookies/localStorage/IndexedDB/cache/service workers
+Most debug folders are ignored by `.gitignore` through:
 
-Backups are encrypted with a user-supplied password.
+```gitignore
+debug-*/
+*-output/
+```
 
-Warning:
-- Full backups may contain login cookies and session tokens.
-- Anyone with the file and password may access logged-in accounts.
-- Some websites may still force re-login due to device, IP, 2FA, or risk checks.
-- This is not Chrome Sync. It restores GlassBox/Electron profile sessions.
+## Safety boundaries
 
-## Profile Identity Rule
-GlassBox has one local fallback profile:
+Fast packs intentionally avoid account-changing or public actions by default.
 
-- `Default` can be used without an email.
+Not automated in the current fast-pack layer:
 
-For non-default profiles:
+- login flows
+- comments/posts
+- issue/PR creation
+- merges/deletes
+- stars/follows
+- account/workspace settings
+- uploads and voice flows for LLM chat products
 
-- A profile can be created without email.
-- After logging into Google/Gmail in that profile, use `Detect email` to attach account identity.
-- The profile name can be renamed.
-- The email is used as the profile identity caption and is not editable from Rename.
-- If you do not want to attach an email, use the Default profile.
+If a site requires login, the expected safe behavior is:
 
-This email is metadata for organizing isolated profiles. It does not automatically prove login or sync Chrome/Google account data.
+```txt
+detect auth room
+report auth required
+wait for manual login
+rerun after prompt surface is available
+```
 
-## 📖 How it works
-1. **Open a Tab**: Launch an isolated BrowserView session.
-2. **Navigate**: Native Electron browsing with deep instrumentation.
-3. **Inspect**: Real-time DOM scanning via preload scripts (no `evaluate` overhead).
-4. **Interact**: Trigger verified action contracts. The system confirms state shifts before reporting success.
-5. **Learn**: Successful tasks are automatically converted into **Skills** for replay.
+## Known behavior
 
----
-Built with Native Electron, SQLite, React, and Tailwind.
+- `npm run electron:dev` runs Electron against `dist-electron`, so main-process changes require a rebuild plus app restart to take effect reliably.
+- The address bar is synced from the active tab model; redirect-heavy pages may require the shell refresh path to catch up after navigation.
+- Some sites expose contenteditable prompt surfaces rather than plain `<textarea>` elements, so prompt-target selectors intentionally include both forms.
 
-how to push?
-git add -A ; git commit -m "commit msg default" ; git push origin main
+## Development note
+
+If you change main-process API behavior, do this before validating:
+
+```powershell
+npm run build
+npm run electron:dev
+```
+
+Then run the relevant test script from `scripts/`.
