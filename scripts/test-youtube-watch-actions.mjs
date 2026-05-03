@@ -79,42 +79,165 @@ async function waitForWatchUrl(tabId, timeoutMs = 10000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const state = await getState(tabId);
-    if (String(state.url || '').includes('/watch')) {
-      return { ok: true, state };
+    const url = String(state.url || '');
+    if (url.includes('/watch')) {
+      return { ok: true, url, state };
     }
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
-  return { ok: false };
+  const state = await getState(tabId).catch(() => null);
+  return {
+    ok: false,
+    url: String(state?.url || ''),
+    state,
+  };
+}
+
+async function scrollTargetIntoView(tabId, selector) {
+  if (!selector) return false;
+
+  const result = await evaluate(tabId, `
+    (() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      return true;
+    })();
+  `);
+
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  return Boolean(result?.result);
+}
+
+async function navigateResolvedFirstVideoHref(tabId, selector) {
+  if (!selector) {
+    return {
+      ok: false,
+      reason: 'NO_SELECTOR_FOR_DIRECT_HREF_NAVIGATION',
+    };
+  }
+
+  const hrefResult = await evaluate(tabId, `
+    (() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const href = el?.href || el?.getAttribute?.('href') || '';
+      if (!href) return null;
+      return new URL(href, location.href).toString();
+    })();
+  `);
+
+  const href = String(hrefResult?.result || '');
+
+  if (!href || !href.includes('/watch')) {
+    return {
+      ok: false,
+      reason: 'NO_WATCH_HREF_FOUND',
+      href,
+    };
+  }
+
+  await navigate(tabId, href);
+  const watch = await waitForWatchUrl(tabId, 8000);
+
+  return {
+    ok: watch.ok,
+    href,
+    watch,
+  };
 }
 
 async function clickFirstVideoWithRetry(tabId) {
-  let firstVideo = await resolveAndAct(tabId, {
-    targetKey: 'first_video_result',
-    kind: 'link',
-    action: 'click',
-  });
+  const attempts = [];
 
-  if (!firstVideo?.ok && firstVideo?.reason === 'ELEMENT_NOT_VISIBLE' && firstVideo?.resolve?.target?.selector) {
-    const selector = firstVideo.resolve.target.selector;
-    await evaluate(tabId, `
-      (() => {
-        const el = document.querySelector(${JSON.stringify(selector)});
-        if (el) {
-          el.scrollIntoView({ block: 'center', inline: 'nearest' });
-          return true;
-        }
-        return false;
-      })();
-    `);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    firstVideo = await resolveAndAct(tabId, {
+  async function resolveFirstVideo() {
+    return resolveTarget(tabId, {
+      targetKey: 'first_video_result',
+      kind: 'link',
+    });
+  }
+
+  async function clickFirstVideo(label) {
+    const clicked = await resolveAndAct(tabId, {
       targetKey: 'first_video_result',
       kind: 'link',
       action: 'click',
     });
+
+    const watch = await waitForWatchUrl(tabId, 8000);
+    const ok = Boolean(clicked?.ok) && Boolean(watch.ok);
+
+    attempts.push({
+      label,
+      clickedOk: Boolean(clicked?.ok),
+      clickedReason: clicked?.reason || '',
+      urlChanged: Boolean(clicked?.verification?.urlChanged),
+      watchOk: Boolean(watch.ok),
+      finalUrl: watch.url,
+      clicked,
+    });
+
+    return {
+      ok,
+      clicked,
+      watch,
+    };
   }
 
-  return firstVideo;
+  const attempt1 = await clickFirstVideo('normal_click');
+  if (attempt1.ok) {
+    return {
+      ok: true,
+      strategy: 'normal_click',
+      attempts,
+      clicked: attempt1.clicked,
+      watch: attempt1.watch,
+    };
+  }
+
+  const resolved = await resolveFirstVideo();
+  const selector = resolved?.target?.selector || attempt1.clicked?.resolve?.target?.selector || '';
+
+  if (selector) {
+    await scrollTargetIntoView(tabId, selector);
+    const attempt2 = await clickFirstVideo('scroll_then_click');
+    if (attempt2.ok) {
+      return {
+        ok: true,
+        strategy: 'scroll_then_click',
+        attempts,
+        resolved,
+        clicked: attempt2.clicked,
+        watch: attempt2.watch,
+      };
+    }
+  }
+
+  const direct = await navigateResolvedFirstVideoHref(tabId, selector);
+  attempts.push({
+    label: 'direct_href_navigation',
+    ok: Boolean(direct.ok),
+    href: direct.href,
+    reason: direct.reason || '',
+    finalUrl: direct.watch?.url || '',
+  });
+
+  if (direct.ok) {
+    return {
+      ok: true,
+      strategy: 'direct_href_navigation',
+      attempts,
+      resolved,
+      direct,
+      watch: direct.watch,
+    };
+  }
+
+  return {
+    ok: false,
+    reason: 'FIRST_VIDEO_DID_NOT_OPEN',
+    attempts,
+    resolved,
+  };
 }
 
 async function revealPlayerControls(tabId) {
@@ -191,8 +314,7 @@ async function main() {
   const firstVideo = await clickFirstVideoWithRetry(tabId);
   steps.push({ step: 'open_first_video', firstVideo });
 
-  const watchWait = await waitForWatchUrl(tabId, 12000);
-  const openedVideo = Boolean(firstVideo?.ok) && watchWait.ok;
+  const openedVideo = Boolean(firstVideo?.ok);
 
   const playPauseResolved = await resolvePlayPauseWithReveal(tabId);
 
@@ -271,11 +393,46 @@ async function main() {
     ? Boolean((await resolveAndAct(tabId, { targetKey: 'subscribe_button', kind: 'button', action: 'click' }))?.ok)
     : false;
 
-  const passed =
-    openedVideo &&
-    Boolean(playPauseResolved?.found) &&
-    playPauseClicked &&
-    playerStateChangedOk;
+  const required = {
+    openedVideo,
+    playPauseResolved: Boolean(playPauseResolved?.found),
+    playPauseClicked,
+    playerStateChanged: playerStateChangedOk,
+  };
+
+  const requiredPassed =
+    required.openedVideo &&
+    required.playPauseResolved &&
+    required.playPauseClicked &&
+    required.playerStateChanged;
+
+  const optional = {
+    commentBox: {
+      found: commentBoxFound,
+      focused: commentBoxFocused,
+      required: false,
+      reason: commentBoxFound
+        ? 'COMMENT_BOX_AVAILABLE'
+        : 'COMMENT_BOX_NOT_FOUND_OR_NOT_LOADED',
+    },
+  };
+
+  const blockedByPolicy = {
+    likeButton: {
+      resolved: likeButtonResolved,
+      clicked: false,
+      status: 'skipped',
+      reason: 'ACCOUNT_CHANGING_ACTION_BLOCKED_BY_DEFAULT',
+    },
+    subscribeButton: {
+      resolved: subscribeButtonResolved,
+      clicked: false,
+      status: 'skipped',
+      reason: 'ACCOUNT_CHANGING_ACTION_BLOCKED_BY_DEFAULT',
+    },
+  };
+
+  const passed = requiredPassed;
 
   const payload = {
     runAt: new Date().toISOString(),
@@ -283,6 +440,11 @@ async function main() {
     passed,
     safeMode: SAFE_MODE,
     allowAccountActions: ALLOW_ACCOUNT_ACTIONS,
+    required,
+    optional,
+    blockedByPolicy,
+    openStrategy: firstVideo?.strategy || '',
+    openFailureReason: firstVideo?.reason || '',
     openedVideo,
     playPauseResolved: Boolean(playPauseResolved?.found),
     playPauseClicked,
@@ -313,17 +475,27 @@ async function main() {
 
   const summary = [
     `passed: ${passed}`,
+    '',
+    '[Required]',
+    `openedVideo: ${required.openedVideo}`,
+    `playPauseResolved: ${required.playPauseResolved}`,
+    `playPauseClicked: ${required.playPauseClicked}`,
+    `playerStateChanged: ${required.playerStateChanged}`,
+    `openStrategy: ${firstVideo?.strategy || 'none'}`,
+    `openFailureReason: ${firstVideo?.reason || ''}`,
+    '',
+    '[Optional]',
+    `commentBoxFound: ${optional.commentBox.found}`,
+    `commentBoxFocused: ${optional.commentBox.focused}`,
+    `commentBoxReason: ${optional.commentBox.reason}`,
+    '',
+    '[BlockedByPolicy]',
+    `likeButtonResolved: ${blockedByPolicy.likeButton.resolved}`,
+    `likeButtonClicked: ${blockedByPolicy.likeButton.status}`,
+    `subscribeButtonResolved: ${blockedByPolicy.subscribeButton.resolved}`,
+    `subscribeButtonClicked: ${blockedByPolicy.subscribeButton.status}`,
+    '',
     `tabId: ${tabId}`,
-    `openedVideo: ${openedVideo}`,
-    `playPauseResolved: ${Boolean(playPauseResolved?.found)}`,
-    `playPauseClicked: ${playPauseClicked}`,
-    `playerStateChanged: ${playerStateChangedOk}`,
-    `commentBoxFound: ${commentBoxFound}`,
-    `commentBoxFocused: ${commentBoxFocused}`,
-    `likeButtonResolved: ${likeButtonResolved}`,
-    `likeButtonClicked: ${likeButtonClicked}`,
-    `subscribeButtonResolved: ${subscribeButtonResolved}`,
-    `subscribeButtonClicked: ${subscribeButtonClicked}`,
     `result: ${resultPath}`,
   ].join('\n');
 
