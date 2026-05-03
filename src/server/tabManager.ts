@@ -9,6 +9,56 @@ const DEFAULT_LANDING_URL = 'https://bing.com';
 const MIN_ZOOM_FACTOR = 0.5;
 const MAX_ZOOM_FACTOR = 3;
 const ZOOM_STEP = 0.1;
+const CHROME_WINDOWS_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
+const WHATSAPP_UA_PATCH_JS = `
+(() => {
+  try {
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () => '${CHROME_WINDOWS_UA}',
+      configurable: true
+    });
+
+    Object.defineProperty(navigator, 'appVersion', {
+      get: () => '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+      configurable: true
+    });
+
+    if (navigator.userAgentData) {
+      Object.defineProperty(navigator, 'userAgentData', {
+        get: () => ({
+          brands: [
+            { brand: 'Google Chrome', version: '142' },
+            { brand: 'Chromium', version: '142' },
+            { brand: 'Not A(Brand', version: '99' }
+          ],
+          mobile: false,
+          platform: 'Windows',
+          getHighEntropyValues: async () => ({
+            brands: [
+              { brand: 'Google Chrome', version: '142' },
+              { brand: 'Chromium', version: '142' },
+              { brand: 'Not A(Brand', version: '99' }
+            ],
+            mobile: false,
+            platform: 'Windows',
+            platformVersion: '10.0.0',
+            architecture: 'x86',
+            model: '',
+            uaFullVersion: '142.0.0.0',
+            fullVersionList: [
+              { brand: 'Google Chrome', version: '142.0.0.0' },
+              { brand: 'Chromium', version: '142.0.0.0' },
+              { brand: 'Not A(Brand', version: '99.0.0.0' }
+            ]
+          })
+        }),
+        configurable: true
+      });
+    }
+  } catch {}
+})();
+`;
 
 // Defensive Electron import for Node/Vite preview
 let app: any, BrowserView: any, session: any;
@@ -28,6 +78,8 @@ try {
       on: () => {},
       getURL: () => 'about:blank',
       loadURL: async () => {},
+      getUserAgent: () => '',
+      setUserAgent: () => {},
       executeJavaScript: async () => {},
       insertText: () => {},
       capturePage: async () => ({ toPNG: () => Buffer.from([]), getSize: () => ({ width: 0, height: 0 }) }),
@@ -42,6 +94,73 @@ try {
   session = { fromPartition: () => ({ clearCache: async () => {}, clearStorageData: async () => {} }) };
 }
 
+const patchedSessions = new WeakSet<any>();
+
+function shouldUseWhatsAppSpoof(url: string) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === 'web.whatsapp.com' || host.endsWith('.whatsapp.net');
+  } catch {
+    return false;
+  }
+}
+
+function installWhatsAppUserAgentPatch(partitionSession: any) {
+  if (!partitionSession || patchedSessions.has(partitionSession)) {
+    return;
+  }
+
+  patchedSessions.add(partitionSession);
+
+  if (!partitionSession.webRequest?.onBeforeSendHeaders) {
+    return;
+  }
+
+  partitionSession.webRequest.onBeforeSendHeaders(
+    { urls: ['https://web.whatsapp.com/*', 'https://*.whatsapp.net/*'] },
+    (details: any, callback: (response: { requestHeaders: Record<string, string> }) => void) => {
+      const requestHeaders = { ...(details.requestHeaders || {}) };
+      requestHeaders['User-Agent'] = CHROME_WINDOWS_UA;
+
+      delete requestHeaders['sec-ch-ua'];
+      delete requestHeaders['Sec-CH-UA'];
+      delete requestHeaders['sec-ch-ua-mobile'];
+      delete requestHeaders['Sec-CH-UA-Mobile'];
+      delete requestHeaders['sec-ch-ua-platform'];
+      delete requestHeaders['Sec-CH-UA-Platform'];
+      delete requestHeaders['sec-ch-ua-platform-version'];
+      delete requestHeaders['Sec-CH-UA-Platform-Version'];
+      delete requestHeaders['sec-ch-ua-full-version'];
+      delete requestHeaders['Sec-CH-UA-Full-Version'];
+      delete requestHeaders['sec-ch-ua-full-version-list'];
+      delete requestHeaders['Sec-CH-UA-Full-Version-List'];
+
+      callback({ requestHeaders });
+    }
+  );
+}
+
+function applyWhatsAppIdentityForUrl(tab: TabMetadata, url: string) {
+  if (!tab.webContents || typeof tab.webContents.setUserAgent !== 'function') {
+    return;
+  }
+
+  const nextUserAgent = shouldUseWhatsAppSpoof(url)
+    ? CHROME_WINDOWS_UA
+    : tab.baseUserAgent || '';
+
+  tab.webContents.setUserAgent(nextUserAgent);
+}
+
+async function patchWhatsAppNavigatorIdentity(tab: TabMetadata) {
+  const currentUrl = typeof tab.webContents?.getURL === 'function' ? tab.webContents.getURL() : tab.url;
+  if (!shouldUseWhatsAppSpoof(currentUrl) || typeof tab.webContents?.executeJavaScript !== 'function') {
+    return;
+  }
+
+  await tab.webContents.executeJavaScript(WHATSAPP_UA_PATCH_JS, true).catch(() => {});
+}
+
 export interface TabMetadata {
   id: string;
   profileId: string;
@@ -52,6 +171,7 @@ export interface TabMetadata {
   title: string;
   domHash: string;
   elements: any[];
+  baseUserAgent: string;
 }
 
 class TabManager {
@@ -143,6 +263,8 @@ class TabManager {
 
     const id = uuidv4();
     const startUrl = initialUrl.trim() || DEFAULT_LANDING_URL;
+    const partitionSession = session.fromPartition(profile.partition);
+    installWhatsAppUserAgentPatch(partitionSession);
 
     const view = new BrowserView({
       webPreferences: {
@@ -162,7 +284,10 @@ class TabManager {
       url: startUrl,
       title: startUrl === DEFAULT_LANDING_URL ? 'Bing' : 'New Tab',
       domHash: '',
-      elements: []
+      elements: [],
+      baseUserAgent: typeof view.webContents.getUserAgent === 'function'
+        ? view.webContents.getUserAgent()
+        : ''
     };
 
     /** Persistence: Save tab into tabs table */
@@ -176,6 +301,9 @@ class TabManager {
 
     tab.webContents.on('did-start-loading', () => console.log('Loading started'));
     tab.webContents.on('did-finish-load', () => console.log('Page loaded:', tab.webContents.getURL()));
+    tab.webContents.on('dom-ready', () => {
+      void patchWhatsAppNavigatorIdentity(tab);
+    });
 
     // Sync metadata on navigation
     tab.webContents.on('page-title-updated', (_e: any, title: string) => {
@@ -196,6 +324,7 @@ class TabManager {
       db.prepare('UPDATE tabs SET url = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?').run(url, id);
     });
 
+    applyWhatsAppIdentityForUrl(tab, startUrl);
     void tab.webContents.loadURL(startUrl).catch((error: any) => {
       console.warn('Default tab load failed:', error?.message || error);
     });
@@ -363,6 +492,8 @@ class TabManager {
     if (this.activeTabId !== id) {
       this.setActiveTab(id);
     }
+
+    applyWhatsAppIdentityForUrl(tab, url);
 
     const waitForLoad = new Promise<void>((resolve) => {
       const done = () => resolve();
