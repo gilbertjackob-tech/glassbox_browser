@@ -2,6 +2,7 @@ import { detectChatGptRoom } from './chatgptRoomDetector.js';
 import { detectGeminiRoom } from './geminiRoomDetector.js';
 import { detectGitHubRoom } from './githubRoomDetector.js';
 import { detectGoogleRoom } from './googleRoomDetector.js';
+import { detectWhatsAppRoom } from './whatsappRoomDetector.js';
 import { detectYouTubeRoom } from './youtubeRoomDetector.js';
 import type { SiteRoomResult } from './types.js';
 
@@ -39,6 +40,10 @@ export async function detectSiteRoom(input: {
 
   if (host === 'github.com') {
     return detectGitHubRoom(input);
+  }
+
+  if (host === 'web.whatsapp.com') {
+    return detectWhatsAppRoom(input);
   }
 
   return null;

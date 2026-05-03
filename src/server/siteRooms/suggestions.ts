@@ -346,3 +346,86 @@ export function getGeminiRoomSuggestions(room: SiteRoomResult): RoomSuggestion[]
 
   return suggestions;
 }
+
+export function getWhatsAppRoomSuggestions(room: SiteRoomResult): RoomSuggestion[] {
+  const suggestions: RoomSuggestion[] = [];
+
+  if (room.room === 'whatsapp_auth') {
+    suggestions.push({
+      type: 'info',
+      safe: false,
+      guarded: true,
+      reason: 'WhatsApp Web login is required. Link this profile manually by scanning the QR code first.',
+    });
+    return suggestions;
+  }
+
+  if (room.room === 'whatsapp_home') {
+    suggestions.push({
+      type: 'skill',
+      name: 'whatsapp_search_chat',
+      safe: true,
+      inputs: ['chat'],
+      reason: 'WhatsApp chat list supports searching for a chat.',
+    });
+
+    suggestions.push({
+      type: 'skill',
+      name: 'whatsapp_open_first_chat',
+      safe: true,
+      reason: 'Opening a chat is a safe navigation action.',
+    });
+  }
+
+  if (room.room === 'whatsapp_chat') {
+    suggestions.push({
+      type: 'skill',
+      name: 'whatsapp_prepare_message',
+      safe: true,
+      inputs: ['message'],
+      reason: 'Preparing text in the message box is safe because it does not send.',
+    });
+
+    suggestions.push({
+      type: 'target',
+      targetKey: 'send_button',
+      safe: false,
+      guarded: true,
+      reason: 'Sending a WhatsApp message is an external communication and requires explicit confirmation.',
+    });
+
+    suggestions.push({
+      type: 'target',
+      targetKey: 'attach_button',
+      safe: false,
+      guarded: true,
+      reason: 'File attachment is guarded and disabled in this fast pack.',
+    });
+
+    suggestions.push({
+      type: 'target',
+      targetKey: 'voice_call_button',
+      safe: false,
+      guarded: true,
+      reason: 'Voice call is guarded and disabled in this fast pack.',
+    });
+
+    suggestions.push({
+      type: 'target',
+      targetKey: 'video_call_button',
+      safe: false,
+      guarded: true,
+      reason: 'Video call is guarded and disabled in this fast pack.',
+    });
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push({
+      type: 'info',
+      safe: true,
+      reason: 'No WhatsApp room-specific suggestions available yet.',
+    });
+  }
+
+  return suggestions;
+}

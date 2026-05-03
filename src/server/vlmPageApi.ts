@@ -25,6 +25,7 @@ import {
   getGeminiRoomSuggestions,
   getGitHubRoomSuggestions,
   getGoogleRoomSuggestions,
+  getWhatsAppRoomSuggestions,
   getYouTubeRoomSuggestions,
 } from './siteRooms/suggestions.js';
 
@@ -687,6 +688,18 @@ export const vlmPageApi = {
         confidence: room.confidence,
         url: room.url,
         suggestions: getGitHubRoomSuggestions(room),
+        landmarks: room.landmarks,
+      };
+    }
+
+    if (room.site === 'whatsapp') {
+      return {
+        ok: true,
+        site: room.site,
+        room: room.room,
+        confidence: room.confidence,
+        url: room.url,
+        suggestions: getWhatsAppRoomSuggestions(room),
         landmarks: room.landmarks,
       };
     }

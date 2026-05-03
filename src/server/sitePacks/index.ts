@@ -2,6 +2,7 @@ import { chatgptPack } from './chatgpt.js';
 import { geminiPack } from './gemini.js';
 import { githubPack } from './github.js';
 import { googlePack } from './google.js';
+import { whatsappPack } from './whatsapp.js';
 import { youtubePack } from './youtube.js';
 import type { SiteStarterPack } from './types.js';
 
@@ -11,6 +12,7 @@ const packs = [
   githubPack,
   chatgptPack,
   geminiPack,
+  whatsappPack,
 ];
 
 export function normalizeHost(hostOrUrl: string) {
