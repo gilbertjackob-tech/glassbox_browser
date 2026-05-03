@@ -34,8 +34,13 @@ export const youtubePack: SiteStarterPack = {
       targetKey: 'first_video_result',
       kind: 'link',
       selectors: [
+        'a.ytLockupMetadataViewModelTitle[href*="/watch"]',
         'ytd-video-renderer a#video-title',
+        'ytd-video-renderer a#video-title[href*="/watch"]',
+        'ytd-video-renderer a#thumbnail[href*="/watch"]',
         'a#video-title',
+        'a#thumbnail[href*="/watch"]',
+        'a#video-title[href*="/watch"]',
         'ytd-rich-grid-media a#video-title-link',
       ],
       actions: ['click'],
@@ -63,6 +68,7 @@ export const youtubePack: SiteStarterPack = {
         'ytd-video-renderer a#video-title',
         'a#video-title',
         'ytd-rich-grid-media a#video-title-link',
+        'a.ytLockupMetadataViewModelTitle[href*="/watch"]',
       ],
       actions: ['click'],
       verify: {
@@ -198,25 +204,34 @@ export const youtubePack: SiteStarterPack = {
       queryPattern: 'search youtube and open first result',
       steps: [
         {
+          name: 'type search query',
           targetKey: 'search_box',
           kind: 'input',
           action: 'type',
           text: '{{query}}',
           clearFirst: true,
-          verify: { valueChanged: true },
+          verify: {
+            valueChanged: true,
+          },
         },
         {
+          name: 'submit search',
           targetKey: 'search_box',
           kind: 'input',
           action: 'press',
           key: 'Enter',
-          verify: { urlChanged: true },
+          verify: {
+            urlChanged: true,
+          },
         },
         {
+          name: 'open first video result',
           targetKey: 'first_video_result',
           kind: 'link',
           action: 'click',
-          verify: { urlIncludes: '/watch' },
+          verify: {
+            urlIncludes: '/watch',
+          },
         },
       ],
     },

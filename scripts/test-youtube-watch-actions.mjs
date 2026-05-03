@@ -117,6 +117,57 @@ async function clickFirstVideoWithRetry(tabId) {
   return firstVideo;
 }
 
+async function revealPlayerControls(tabId) {
+  return evaluate(tabId, `
+    (() => {
+      const player =
+        document.querySelector('#movie_player') ||
+        document.querySelector('.html5-video-player') ||
+        document.querySelector('video');
+      if (!player) {
+        return { ok: false, reason: 'PLAYER_NOT_FOUND' };
+      }
+
+      const rect = player.getBoundingClientRect();
+      const x = rect.left + Math.min(rect.width / 2, 40);
+      const y = rect.top + Math.min(rect.height / 2, 40);
+
+      ['mouseover', 'mousemove', 'mouseenter'].forEach((type) => {
+        player.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          view: window,
+        }));
+      });
+
+      return { ok: true, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+    })();
+  `);
+}
+
+async function resolvePlayPauseWithReveal(tabId) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await revealPlayerControls(tabId).catch(() => null);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    const resolved = await resolveTarget(tabId, {
+      targetKey: 'play_pause_button',
+      kind: 'button',
+    });
+
+    if (resolved?.found) {
+      return resolved;
+    }
+  }
+
+  return {
+    found: false,
+    reason: 'PLAY_PAUSE_NOT_RESOLVED_AFTER_REVEAL',
+  };
+}
+
 function playerStateChanged(before, after) {
   return (
     before?.paused !== after?.paused ||
@@ -143,10 +194,7 @@ async function main() {
   const watchWait = await waitForWatchUrl(tabId, 12000);
   const openedVideo = Boolean(firstVideo?.ok) && watchWait.ok;
 
-  const playPauseResolved = await resolveTarget(tabId, {
-    targetKey: 'play_pause_button',
-    kind: 'button',
-  });
+  const playPauseResolved = await resolvePlayPauseWithReveal(tabId);
 
   const beforeStateRes = await evaluate(tabId, `
     (() => {
@@ -161,11 +209,13 @@ async function main() {
     })();
   `);
 
-  const playPauseClick = await resolveAndAct(tabId, {
-    targetKey: 'play_pause_button',
-    kind: 'button',
-    action: 'click',
-  });
+  const playPauseClick = playPauseResolved?.found
+    ? await resolveAndAct(tabId, {
+        targetKey: 'play_pause_button',
+        kind: 'button',
+        action: 'click',
+      })
+    : { ok: false, reason: 'PLAY_PAUSE_NOT_FOUND' };
 
   await new Promise((resolve) => setTimeout(resolve, 900));
 
@@ -185,7 +235,7 @@ async function main() {
   const beforePlayerState = beforeStateRes?.result || {};
   const afterPlayerState = afterStateRes?.result || {};
   const playPauseClicked = Boolean(playPauseClick?.ok);
-  const playerStateChangedOk = playerStateChanged(beforePlayerState, afterPlayerState);
+  const playerStateChangedOk = playPauseClicked && playerStateChanged(beforePlayerState, afterPlayerState);
 
   const commentResolve = await resolveTarget(tabId, {
     targetKey: 'comment_box',

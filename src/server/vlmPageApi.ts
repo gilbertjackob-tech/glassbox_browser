@@ -262,6 +262,38 @@ async function verifyTargetInPage(tab: TabMetadata, target: ActionTarget) {
   }, [target.selector]);
 }
 
+async function scrollTargetIntoView(tab: TabMetadata, selector: string) {
+  return await runInPage(tab, (targetSelector: string) => {
+    const el = document.querySelector(targetSelector) as HTMLElement | null;
+    if (!el) return false;
+    el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    return true;
+  }, [selector]);
+}
+
+async function verifyTargetWithVisibilityRecovery(
+  tab: TabMetadata,
+  target: ActionTarget,
+  action: string
+) {
+  let verification = await verifyTargetInPage(tab, target);
+  let recoveredByScroll = false;
+
+  if (!verification.ok && verification.reason === 'ELEMENT_NOT_VISIBLE' && action === 'click') {
+    const scrolled = await scrollTargetIntoView(tab, target.selector).catch(() => false);
+    if (scrolled) {
+      await sleep(180);
+      verification = await verifyTargetInPage(tab, target);
+      recoveredByScroll = verification.ok;
+    }
+  }
+
+  return {
+    verification,
+    recoveredByScroll,
+  };
+}
+
 async function getPageStateSnapshot(tab: TabMetadata): Promise<PageStateSnapshot> {
   const pageState = await runInPage(tab, () => {
     function selectorFor(el: Element | null): string | null {
@@ -913,13 +945,14 @@ export const vlmPageApi = {
       };
     }
 
-    const verification = await verifyTargetInPage(tab, target);
+    const { verification, recoveredByScroll } = await verifyTargetWithVisibilityRecovery(tab, target, action);
     if (!verification.ok) {
       return {
         ok: false,
         reason: verification.reason,
         target,
         stateHash: snapshot.stateHash,
+        recoveredByScroll,
       };
     }
 
@@ -947,6 +980,7 @@ export const vlmPageApi = {
         action,
         target,
         verification,
+        recoveredByScroll,
         clickResult: result,
         actionVerification,
       });
@@ -1229,13 +1263,14 @@ export const vlmPageApi = {
       domHash: await getDomHash(tab),
     };
 
-    const verification = await verifyTargetInPage(tab, target);
+    const { verification, recoveredByScroll } = await verifyTargetWithVisibilityRecovery(tab, target, action);
     if (!verification.ok) {
       return {
         ok: false,
         reason: verification.reason,
         target,
         resolve: resolved,
+        recoveredByScroll,
       };
     }
 
@@ -1260,6 +1295,7 @@ export const vlmPageApi = {
         action,
         target,
         verification,
+        recoveredByScroll,
         clickResult: result,
         actionVerification,
         resolve: resolved,
