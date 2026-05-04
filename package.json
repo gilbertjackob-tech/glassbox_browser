@@ -12,6 +12,7 @@
     "electron:dev": "node scripts/electron-dev.mjs",
     "gb": "node scripts/glassbox-cli.mjs",
     "test:smart-task": "tsx scripts/test-smart-task.ts",
+    "test:smart-task:api": "tsx scripts/test-smart-task-api.ts",
     "test:whatsapp:file": "node scripts/test-whatsapp-send-files-clipboard.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",

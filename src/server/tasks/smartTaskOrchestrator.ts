@@ -26,6 +26,7 @@ export interface SmartTaskResult {
   executedSteps: Array<Record<string, unknown>>;
   verification: Record<string, unknown>;
   learnedEvents: Array<Record<string, unknown>>;
+  learningWarning?: string;
   failureReason?: string;
   evidence: Record<string, unknown>;
 }
@@ -248,6 +249,25 @@ async function recordVerifiedLearning(
     recordSiteLearningEvent(deps.db as any, event);
   }
   learnedEvents.push(event);
+}
+
+async function tryRecordVerifiedLearning(
+  deps: SmartTaskDeps,
+  profileId: string,
+  tabId: string,
+  actionType: string,
+  targetKey: string | undefined,
+  goal: string,
+  verification: Record<string, unknown>,
+  learnedEvents: Array<Record<string, unknown>>,
+): Promise<string | undefined> {
+  try {
+    await recordVerifiedLearning(deps, profileId, tabId, actionType, targetKey, goal, verification, learnedEvents);
+    return undefined;
+  } catch (error: any) {
+    const reason = typeof error?.message === 'string' ? error.message : String(error || 'UNKNOWN_LEARNING_ERROR');
+    return `LEARNING_INSERT_FAILED: ${reason}`;
+  }
 }
 
 async function ensureSiteTab(
@@ -479,9 +499,10 @@ async function runWhatsAppMessageFlow(
   const verification = await verifyWhatsAppMessageSent(tabId, message, String(beforeState?.domHash || ''), deps);
   const finalRoom = await deps.vlmPageApi.getSiteRoom(tabId);
   const learnedEvents: Array<Record<string, unknown>> = [];
+  let learningWarning: string | undefined;
 
   if (send.ok && verification.ok) {
-    await recordVerifiedLearning(deps, profileId, tabId, 'smart_whatsapp_send_message', 'send_button', input.goal, {
+    learningWarning = await tryRecordVerifiedLearning(deps, profileId, tabId, 'smart_whatsapp_send_message', 'send_button', input.goal, {
       beforeState,
       afterState: verification.afterState,
       finalRoom,
@@ -506,6 +527,7 @@ async function runWhatsAppMessageFlow(
       finalRoom,
     },
     learnedEvents,
+    learningWarning,
     failureReason: send.ok && verification.ok ? undefined : 'WHATSAPP_MESSAGE_NOT_VERIFIED',
     evidence,
   };
@@ -638,9 +660,19 @@ async function runWhatsAppFileFlow(
   const afterState = await deps.vlmPageApi.getState(tabId);
   const finalRoom = await deps.vlmPageApi.getSiteRoom(tabId);
   const learnedEvents: Array<Record<string, unknown>> = [];
+  let learningWarning: string | undefined;
+  const sendVerified = input.dryRun
+    ? true
+    : Boolean(
+        sendFile.ok && (
+          (sendFile as any)?.sent === true
+          || (sendFile as any)?.verification?.ok === true
+          || (sendFile as any)?.reason === 'WHATSAPP_FILES_SENT'
+        )
+      );
 
-  if (!input.dryRun && sendFile.ok) {
-    await recordVerifiedLearning(deps, profileId, tabId, 'smart_whatsapp_send_file', 'message_box', input.goal, {
+  if (!input.dryRun && sendVerified) {
+    learningWarning = await tryRecordVerifiedLearning(deps, profileId, tabId, 'smart_whatsapp_send_file', 'message_box', input.goal, {
       beforeState,
       afterState,
       finalRoom,
@@ -649,23 +681,24 @@ async function runWhatsAppFileFlow(
   }
 
   return {
-    ok: input.dryRun ? true : Boolean(sendFile.ok),
-    status: input.dryRun ? 'DRY_RUN' : (sendFile.ok ? 'SUCCESS' : 'FAILED'),
+    ok: sendVerified,
+    status: input.dryRun ? 'DRY_RUN' : (sendVerified ? 'SUCCESS' : 'FAILED'),
     goal: input.goal,
     detectedIntent: intent,
     initialWorldStateSummary: world,
     skippedSteps,
     executedSteps,
     verification: {
-      ok: input.dryRun ? true : Boolean(sendFile.ok),
-      sent: input.dryRun ? false : Boolean(sendFile.ok),
+      ok: sendVerified,
+      sent: input.dryRun ? false : sendVerified,
       evidence: typeof (sendFile as any)?.reason === 'string' ? (sendFile as any).reason : '',
       beforeState,
       afterState,
       finalRoom,
     },
     learnedEvents,
-    failureReason: input.dryRun || sendFile.ok ? undefined : 'WHATSAPP_FILE_NOT_VERIFIED',
+    learningWarning,
+    failureReason: input.dryRun || sendVerified ? undefined : 'WHATSAPP_FILE_NOT_VERIFIED',
     evidence,
   };
 }
@@ -775,10 +808,11 @@ async function runChatPromptFlow(
   const afterState = await deps.vlmPageApi.getState(tabId);
   const finalRoom = await deps.vlmPageApi.getSiteRoom(tabId);
   const learnedEvents: Array<Record<string, unknown>> = [];
+  let learningWarning: string | undefined;
   const ok = Boolean(sendPrompt.ok && (userMessageFound?.found || responseFound?.found));
 
   if (ok) {
-    await recordVerifiedLearning(deps, profileId, tabId, `smart_${site}_prompt`, 'prompt_box', input.goal, {
+    learningWarning = await tryRecordVerifiedLearning(deps, profileId, tabId, `smart_${site}_prompt`, 'prompt_box', input.goal, {
       beforeState,
       afterState,
       finalRoom,
@@ -804,6 +838,7 @@ async function runChatPromptFlow(
       responseFound,
     },
     learnedEvents,
+    learningWarning,
     failureReason: ok ? undefined : `${site.toUpperCase()}_PROMPT_NOT_VERIFIED`,
     evidence,
   };
@@ -882,10 +917,11 @@ async function runGitHubIssuesFlow(
   const finalRoom = await deps.vlmPageApi.getSiteRoom(repoTab.tabId);
   const afterState = await deps.vlmPageApi.getState(repoTab.tabId);
   const learnedEvents: Array<Record<string, unknown>> = [];
+  let learningWarning: string | undefined;
   const ok = Boolean(openIssues.ok && finalRoom.room === 'github_issues');
 
   if (ok) {
-    await recordVerifiedLearning(deps, profileId, repoTab.tabId, 'smart_github_open_issues', 'repo_issues_link', input.goal, {
+    learningWarning = await tryRecordVerifiedLearning(deps, profileId, repoTab.tabId, 'smart_github_open_issues', 'repo_issues_link', input.goal, {
       beforeState,
       afterState,
       finalRoom,
@@ -908,6 +944,7 @@ async function runGitHubIssuesFlow(
       finalRoom,
     },
     learnedEvents,
+    learningWarning,
     failureReason: ok ? undefined : 'GITHUB_ISSUES_NOT_VERIFIED',
     evidence,
   };
