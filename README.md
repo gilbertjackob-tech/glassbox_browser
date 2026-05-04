@@ -464,9 +464,8 @@ Current send policy:
 Current send-file status:
 
 - `/api/whatsapp/send-file` validates the path and chat policy
-- it opens the target chat
-- it currently returns `FILE_UPLOAD_NOT_IMPLEMENTED_YET`
-- real file upload through Electron/CDP is the next layer, not complete yet
+- it opens the target chat and performs real file upload via browser automation: copy-to-clipboard → paste → preview verification → send
+- on success the endpoint returns a verified result (for example `WHATSAPP_FILES_SENT`) and records evidence of upload completion
 
 ## Room-aware suggestions
 
@@ -590,7 +589,6 @@ Site fast-pack scripts:
 - `test-whatsapp-static-api.mjs`
 - `test-whatsapp-send-message-self.mjs`
 - `test-whatsapp-send-message-blocked.mjs`
-- `test-whatsapp-send-file-stub.mjs`
 
 Most debug folders are ignored by `.gitignore` through:
 
