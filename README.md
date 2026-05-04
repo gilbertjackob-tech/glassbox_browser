@@ -27,12 +27,14 @@ Implemented and live in the repo:
 - WhatsApp Web automation:
   - static-contact API and CLI for listing, opening, and messaging chats
   - guarded external send mode with self-chat bypass
-  - real file uploads via browser automation (no file-send stubs)
+  - real file uploads via browser automation: copy-to-clipboard → paste → preview verification → send
+  - caption support on file sends
+  - verified upload completion before returning success
 - Windows right-click context-menu integration:
-  - 6 pre-configured static chat shortcuts
-  - hidden PowerShell execution (no cmd window)
-  - full Unicode support (Bangla names work correctly)
-  - supports single or multiple file selections
+  - 6 pre-configured static chat shortcuts (profiles, external-send policy respected)
+  - hidden PowerShell execution (no cmd window flash)
+  - full Unicode support (Bangla/international chat names)
+  - single or multiple file selection support
 - Fast packs for:
   - Google Search
   - YouTube
@@ -40,6 +42,21 @@ Implemented and live in the repo:
   - ChatGPT
   - Gemini
   - WhatsApp Web
+
+## Next: v2.1 Roadmap — Stateful Resume + Site Learning
+
+Foundation modules now in repo (see [V2.1_IMPLEMENTATION_GUIDE.md](V2.1_IMPLEMENTATION_GUIDE.md)):
+
+- `src/server/state/worldStateService.ts` — capture current app/profile/tab/target state
+- `src/server/state/tabStateResolver.ts` — determine tab readiness (loading, auth, errors)
+- `src/server/planner/resumePlanner.ts` — plan task steps, skip already-done actions
+- `src/server/learning/siteLearningService.ts` — store verified actions, learn routes, promote skills
+
+**Goal:** Transform from "start task from zero" to "resume from nearest verified state."
+
+Example: WhatsApp file send currently takes 45s from cold start. With resume, if chat is already open: 3s.
+
+See [V2.1_IMPLEMENTATION_GUIDE.md](V2.1_IMPLEMENTATION_GUIDE.md) for full architecture and integration checklist.
 
 ## Stack
 
