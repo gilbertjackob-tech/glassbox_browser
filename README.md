@@ -1,5 +1,7 @@
 # GlassBox Browser
 
+**Stable v2.0** — Web WhatsApp Automation included
+
 GlassBox is a Windows-first Electron browser shell built for visible, verifiable browser automation. It keeps the real page on screen inside an Electron `BrowserView`, exposes a local API for DOM/query/action workflows, and records action evidence in local SQLite storage.
 
 The project is designed around one rule:
@@ -22,13 +24,15 @@ Implemented and live in the repo:
 - Micro-skill save, list, and replay
 - Site-room detection and room-specific suggestions
 - Safe suggestion execution through saved skills only
-- WhatsApp static-contact API and CLI for:
-  - listing approved chats
-  - opening an exact WhatsApp chat
-  - sending a real self-message
-  - guarded external sends
-  - validated file-send stub for future upload wiring
-- Windows right-click context-menu installer for `Send to WhatsApp`
+- WhatsApp Web automation:
+  - static-contact API and CLI for listing, opening, and messaging chats
+  - guarded external send mode with self-chat bypass
+  - real file uploads via browser automation (no file-send stubs)
+- Windows right-click context-menu integration:
+  - 6 pre-configured static chat shortcuts
+  - hidden PowerShell execution (no cmd window)
+  - full Unicode support (Bangla names work correctly)
+  - supports single or multiple file selections
 - Fast packs for:
   - Google Search
   - YouTube

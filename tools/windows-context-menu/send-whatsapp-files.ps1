@@ -8,6 +8,8 @@ param(
   [string[]]$Files
 )
 
+$ErrorActionPreference = "Stop"
+
 $repoRoot = Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent
 $cliPath = Join-Path $repoRoot "scripts\glassbox-cli.mjs"
 
@@ -17,6 +19,7 @@ if (!(Test-Path -LiteralPath $cliPath -PathType Leaf)) {
 }
 
 $resolvedFiles = @()
+
 foreach ($file in $Files) {
   if ([string]::IsNullOrWhiteSpace($file)) {
     continue
@@ -35,18 +38,33 @@ if ($resolvedFiles.Count -lt 1) {
   exit 1
 }
 
-$filesJson = $resolvedFiles | ConvertTo-Json -Compress
-$args = @(
+$nodeArgs = @(
   $cliPath,
-  'whatsapp',
-  'send-file',
-  '--chat', $Chat,
-  '--files-json', $filesJson
+  "whatsapp",
+  "send-file",
+  "--chat",
+  $Chat
 )
 
-if ($AllowExternalSend) {
-  $args += '--allowExternalSend'
+foreach ($resolvedFile in $resolvedFiles) {
+  $nodeArgs += @("--file", $resolvedFile)
 }
 
-& node @args
-exit $LASTEXITCODE
+if ($AllowExternalSend) {
+  $nodeArgs += "--allowExternalSend"
+}
+
+Push-Location $repoRoot
+try {
+  Write-Host "GlassBox repo: $repoRoot"
+  Write-Host "Chat: $Chat"
+  Write-Host "Files:"
+  $resolvedFiles | ForEach-Object { Write-Host " - $_" }
+  Write-Host ""
+
+  & node @nodeArgs
+  exit $LASTEXITCODE
+}
+finally {
+  Pop-Location
+}
