@@ -614,7 +614,6 @@ Not automated in the current fast-pack layer:
 Additional WhatsApp-specific safety:
 
 - external message sending is blocked unless `allowExternalSend: true`
-- file sending is not completed yet at the upload layer
 - calls, attach side-actions, status uploads, and profile/group-admin actions are not automated
 
 If a site requires login, the expected safe behavior is:
