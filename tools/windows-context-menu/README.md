@@ -36,10 +36,10 @@ Note
 The menu calls:
 
 ```txt
-node P:\Hasnat\mirror_browser\scripts\glassbox-cli.mjs whatsapp send-file --chat "<CHAT>" --file "%1"
+powershell -ExecutionPolicy Bypass -File P:\Hasnat\mirror_browser\tools\windows-context-menu\send-whatsapp-files.ps1 -Chat "<CHAT>" "<FILE1>" "<FILE2>"
 ```
 
-So `send-file` must be fully implemented in GlassBox for actual file sending.
+The wrapper forwards to the existing GlassBox CLI and supports one or more file paths.
 
 ## Acceptance Criteria
 

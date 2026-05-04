@@ -10,34 +10,34 @@ Windows Registry Editor Version 5.00
 "MUIVerb"="Hasnat (You)"
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\01Hasnat\command]
-@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Hasnat (You)\" --file \"%1\""
+@="cmd.exe /k powershell -ExecutionPolicy Bypass -File \"P:\\Hasnat\\mirror_browser\\tools\\windows-context-menu\\send-whatsapp-files.ps1\" -Chat \"Hasnat (You)\" \"%1\""
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\02Bihi]
 "MUIVerb"="Bihi"
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\02Bihi\command]
-@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Bihi\" --file \"%1\" --allowExternalSend"
+@="cmd.exe /k powershell -ExecutionPolicy Bypass -File \"P:\\Hasnat\\mirror_browser\\tools\\windows-context-menu\\send-whatsapp-files.ps1\" -Chat \"Bihi\" -AllowExternalSend \"%1\""
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\03Family]
 "MUIVerb"="আমাদের পরিবার"
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\03Family\command]
-@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"আমাদের পরিবার\" --file \"%1\" --allowExternalSend"
+@="cmd.exe /k powershell -ExecutionPolicy Bypass -File \"P:\\Hasnat\\mirror_browser\\tools\\windows-context-menu\\send-whatsapp-files.ps1\" -Chat \"আমাদের পরিবার\" -AllowExternalSend \"%1\""
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\04Tasfia]
 "MUIVerb"="Tasfia New"
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\04Tasfia\command]
-@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Tasfia New\" --file \"%1\" --allowExternalSend"
+@="cmd.exe /k powershell -ExecutionPolicy Bypass -File \"P:\\Hasnat\\mirror_browser\\tools\\windows-context-menu\\send-whatsapp-files.ps1\" -Chat \"Tasfia New\" -AllowExternalSend \"%1\""
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\05Ammu]
 "MUIVerb"="Ammu"
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\05Ammu\command]
-@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Ammu\" --file \"%1\" --allowExternalSend"
+@="cmd.exe /k powershell -ExecutionPolicy Bypass -File \"P:\\Hasnat\\mirror_browser\\tools\\windows-context-menu\\send-whatsapp-files.ps1\" -Chat \"Ammu\" -AllowExternalSend \"%1\""
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\06Abbu]
 "MUIVerb"="Abbu 2"
 
 [HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\06Abbu\command]
-@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Abbu 2\" --file \"%1\" --allowExternalSend"
+@="cmd.exe /k powershell -ExecutionPolicy Bypass -File \"P:\\Hasnat\\mirror_browser\\tools\\windows-context-menu\\send-whatsapp-files.ps1\" -Chat \"Abbu 2\" -AllowExternalSend \"%1\""

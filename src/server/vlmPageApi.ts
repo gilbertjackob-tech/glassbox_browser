@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+import path from 'node:path';
 import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -33,7 +35,7 @@ import {
   assertCanSendToWhatsAppChat,
   assertKnownWhatsAppChat,
   listStaticWhatsAppChats,
-  validateWhatsAppSendFilePath,
+  validateWhatsAppSendFilePaths,
 } from './whatsappService.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
@@ -99,6 +101,367 @@ async function runInPage<T>(tab: TabMetadata, fn: (...args: any[]) => T, args: a
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolvePreferredTabId(requestedTabId?: string) {
+  const normalizedRequested = String(requestedTabId || '').trim();
+  if (normalizedRequested) {
+    return normalizedRequested;
+  }
+
+  const tabs = tabManager.getAllTabs();
+  const activeTabId = typeof tabManager.getActiveTabId === 'function'
+    ? String(tabManager.getActiveTabId() || '').trim()
+    : '';
+
+  const whatsappTab = tabs.find((tab) => /web\.whatsapp\.com/i.test(String(tab.url || '')));
+  if (whatsappTab?.tabId) {
+    return whatsappTab.tabId;
+  }
+
+  if (activeTabId) {
+    return activeTabId;
+  }
+
+  if (tabs[0]?.tabId) {
+    return tabs[0].tabId;
+  }
+
+  throw new Error('TAB_ID_REQUIRED');
+}
+
+const WHATSAPP_PREVIEW_CAPTION_SELECTORS = [
+  '[contenteditable="true"][role="textbox"]',
+  'div[contenteditable="true"]',
+];
+
+const WHATSAPP_PREVIEW_SEND_SELECTORS = [
+  '[data-testid="drawer-middle"] div[role="button"][aria-label*="Send"]',
+  '[data-testid="drawer-right"] div[role="button"][aria-label*="Send"]',
+  'div[role="button"][aria-label*="Send"]',
+  '[data-testid="send"]',
+  '[data-testid="wds-ic-send-filled"]',
+  'span[data-icon="wds-ic-send-filled"]',
+  'span[data-icon="send"]',
+  'button[aria-label*="Send"]',
+  'button[title*="Send"]',
+];
+
+async function waitForCondition<T>(
+  tab: TabMetadata,
+  fn: () => Promise<T> | T,
+  timeoutMs = 5000,
+  intervalMs = 250,
+) {
+  const started = Date.now();
+  let lastResult: T | null = null;
+
+  while (Date.now() - started < timeoutMs) {
+    lastResult = await fn();
+    if (lastResult) {
+      return {
+        ok: true,
+        elapsedMs: Date.now() - started,
+        result: lastResult,
+      };
+    }
+    await sleep(intervalMs);
+  }
+
+  return {
+    ok: false,
+    elapsedMs: Date.now() - started,
+    result: lastResult,
+  };
+}
+
+async function copyFilesToWindowsClipboard(filePaths: string[]) {
+  if (process.platform !== 'win32') {
+    return {
+      ok: false,
+      reason: 'WINDOWS_ONLY_CLIPBOARD_FILE_COPY',
+      filePaths,
+    };
+  }
+
+  const scriptPath = path.resolve(process.cwd(), 'tools', 'windows-context-menu', 'copy-files-to-clipboard.ps1');
+  const args = [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    scriptPath,
+    ...filePaths,
+  ];
+
+  return await new Promise<{
+    ok: boolean;
+    reason: string;
+    scriptPath: string;
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    filePaths: string[];
+  }>((resolve) => {
+    const child = spawn('powershell.exe', args, {
+      cwd: process.cwd(),
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', (error) => {
+      resolve({
+        ok: false,
+        reason: error?.message || 'CLIPBOARD_COPY_PROCESS_FAILED',
+        scriptPath,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        exitCode: null,
+        filePaths,
+      });
+    });
+    child.on('close', (exitCode) => {
+      resolve({
+        ok: exitCode === 0,
+        reason: exitCode === 0 ? 'FILES_COPIED_TO_CLIPBOARD' : 'FILES_CLIPBOARD_COPY_FAILED',
+        scriptPath,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        exitCode,
+        filePaths,
+      });
+    });
+  });
+}
+
+async function focusWhatsAppMessageBox(tabId: string) {
+  return await vlmPageApi.actionResolveAndAct(tabId, {
+    targetKey: 'message_box',
+    kind: 'input',
+    action: 'focus',
+  }).catch((error: any) => ({
+    ok: false,
+    reason: error?.message || String(error),
+  }));
+}
+
+async function pasteFilesIntoWhatsApp(tab: TabMetadata) {
+  try {
+    tab.webContents.focus();
+  } catch {
+    // ignore focus errors and still try the paste path
+  }
+
+  try {
+    if (typeof tab.webContents.paste === 'function') {
+      tab.webContents.paste();
+      return {
+        ok: true,
+        reason: 'WHATSAPP_PASTE_TRIGGERED',
+        method: 'webContents.paste',
+      };
+    }
+  } catch (error: any) {
+    // fall back to keyboard path below
+  }
+
+  try {
+    tab.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Control' });
+    tab.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'V', modifiers: ['control'] });
+    tab.webContents.sendInputEvent({ type: 'char', keyCode: 'v', modifiers: ['control'] });
+    tab.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'V', modifiers: ['control'] });
+    tab.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Control' });
+    return {
+      ok: true,
+      reason: 'WHATSAPP_PASTE_TRIGGERED',
+      method: 'ctrl_v',
+    };
+  } catch (error: any) {
+    return {
+      ok: false,
+      reason: error?.message || 'WHATSAPP_PASTE_FAILED',
+      method: 'ctrl_v',
+    };
+  }
+}
+
+async function waitForWhatsAppPastePreview(tab: TabMetadata, fileNames: string[], timeoutMs = 60000) {
+  const previewWait = await waitForCondition(tab, async () => {
+    const state = await runInPage(tab, (names: string[], sendSelectors: string[]) => {
+      const text = document.body?.innerText || '';
+      const visibleNodes = (selector: string) =>
+        Array.from(document.querySelectorAll(selector)).filter((node) => {
+          const rect = (node as HTMLElement).getBoundingClientRect();
+          const style = window.getComputedStyle(node as Element);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        });
+
+      const hasAnyFileName = names.some((name) => text.includes(name));
+      const hasSend = sendSelectors.some((selector) => visibleNodes(selector).length > 0);
+      const hasDialog = visibleNodes('[role="dialog"]').length > 0;
+      const hasPreview = Boolean(
+        hasDialog ||
+        visibleNodes('[data-testid*="media"]').length > 0 ||
+        visibleNodes('[data-testid*="preview"]').length > 0 ||
+        hasAnyFileName
+      );
+
+      return hasPreview && hasSend
+        ? {
+            hasPreview,
+            hasSend,
+            hasAnyFileName,
+            hasDialog,
+            textSample: text.slice(0, 500),
+          }
+        : null;
+    }, [fileNames, WHATSAPP_PREVIEW_SEND_SELECTORS]).catch(() => null);
+
+    return state;
+  }, timeoutMs, 500);
+
+  return previewWait.ok
+    ? {
+        ok: true,
+        reason: 'WHATSAPP_FILE_PREVIEW_READY',
+        elapsedMs: previewWait.elapsedMs,
+        result: previewWait.result,
+      }
+    : {
+        ok: false,
+        reason: 'WHATSAPP_FILE_PREVIEW_NOT_READY',
+        elapsedMs: previewWait.elapsedMs,
+        result: previewWait.result,
+      };
+}
+
+async function pressWhatsAppEnterToSend(tab: TabMetadata) {
+  try {
+    tab.webContents.focus();
+  } catch {
+    // ignore focus errors before sending enter
+  }
+
+  try {
+    tab.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+    tab.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+    return {
+      ok: true,
+      reason: 'WHATSAPP_ENTER_SENT',
+    };
+  } catch (error: any) {
+    return {
+      ok: false,
+      reason: error?.message || 'WHATSAPP_ENTER_SEND_FAILED',
+    };
+  }
+}
+
+async function waitForWhatsAppSendComplete(tab: TabMetadata, fileNames: string[], timeoutMs = 60000) {
+  const waitResult = await waitForCondition(tab, async () => {
+    const state = await runInPage(tab, (names: string[], sendSelectors: string[]) => {
+      const isVisible = (node: Element) => {
+        const rect = (node as HTMLElement).getBoundingClientRect();
+        const style = window.getComputedStyle(node as Element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      };
+
+      const text = document.body?.innerText || '';
+      const previewVisible =
+        Boolean(Array.from(document.querySelectorAll('[role="dialog"]')).find((node) => isVisible(node))) ||
+        sendSelectors.some((selector) =>
+          Array.from(document.querySelectorAll(selector)).some((node) => isVisible(node))
+        );
+
+      const messageBoxFound = Boolean(
+        Array.from(document.querySelectorAll('footer div[contenteditable="true"][data-tab], footer [role="textbox"][contenteditable="true"], div[aria-label*="Type a message"][contenteditable="true"], div[title*="Type a message"][contenteditable="true"]'))
+          .find((node) => isVisible(node))
+      );
+      const fileNameSeen = names.some((name) => text.includes(name));
+      const previewGone = !previewVisible;
+
+      return previewGone && messageBoxFound
+        ? {
+            previewGone,
+            messageBoxFound,
+            fileNameSeen,
+            textSample: text.slice(0, 500),
+          }
+        : null;
+    }, [fileNames, WHATSAPP_PREVIEW_SEND_SELECTORS]).catch(() => null);
+
+    return state;
+  }, timeoutMs, 500);
+
+  return waitResult.ok
+    ? {
+        ok: true,
+        reason: 'WHATSAPP_FILES_SENT',
+        elapsedMs: waitResult.elapsedMs,
+        result: waitResult.result,
+      }
+    : {
+        ok: false,
+        reason: 'WHATSAPP_FILES_SEND_NOT_VERIFIED',
+        elapsedMs: waitResult.elapsedMs,
+        result: waitResult.result,
+      };
+}
+
+async function typeWhatsAppCaption(tabId: string, caption: string) {
+  const tab = getTabOrThrow(tabId);
+  const selectorResult = await runInPage(tab, (selectors: string[]) => {
+    const isVisible = (node: Element) => {
+      const rect = (node as HTMLElement).getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    };
+
+    for (const selector of selectors) {
+      const nodes = Array.from(document.querySelectorAll(selector));
+      const target = nodes.find((node) => {
+        if (!isVisible(node)) return false;
+        if ((node.closest('footer') || null)) return false;
+        return true;
+      }) as HTMLElement | undefined;
+      if (!target) continue;
+      return { selector };
+    }
+
+    return null;
+  }, [WHATSAPP_PREVIEW_CAPTION_SELECTORS]).catch(() => null);
+
+  if (!selectorResult?.selector) {
+    return {
+      ok: false,
+      reason: 'WHATSAPP_CAPTION_BOX_NOT_FOUND',
+    };
+  }
+
+  const result: any = await vlmPageApi.type(tabId, {
+    selector: selectorResult.selector,
+    text: caption,
+    clearFirst: true,
+  }).catch((error: any) => ({
+    ok: false,
+    reason: error?.message || String(error),
+  }));
+
+  return {
+    ok: Boolean(result?.ok),
+    reason: result?.ok ? 'WHATSAPP_CAPTION_TYPED' : (result?.reason || 'WHATSAPP_CAPTION_TYPE_FAILED'),
+    selector: selectorResult.selector,
+    result,
+  };
 }
 
 async function ensureSitePackSkillsInstalled(profileId: string, host: string) {
@@ -953,11 +1316,8 @@ export const vlmPageApi = {
   },
 
   async openWhatsAppChat(body: any) {
-    const tabId = String(body?.tabId || body?.id || '').trim();
+    const tabId = resolvePreferredTabId(body?.tabId || body?.id);
     const chatInput = String(body?.chat || '').trim();
-    if (!tabId) {
-      throw new Error('TAB_ID_REQUIRED');
-    }
     if (!chatInput) {
       throw new Error('WHATSAPP_CHAT_REQUIRED');
     }
@@ -985,13 +1345,10 @@ export const vlmPageApi = {
   },
 
   async sendWhatsAppMessage(body: any) {
-    const tabId = String(body?.tabId || body?.id || '').trim();
+    const tabId = resolvePreferredTabId(body?.tabId || body?.id);
     const chat = String(body?.chat || '').trim();
     const message = String(body?.message || '');
 
-    if (!tabId) {
-      throw new Error('TAB_ID_REQUIRED');
-    }
     if (!chat) {
       throw new Error('WHATSAPP_CHAT_REQUIRED');
     }
@@ -1064,22 +1421,12 @@ export const vlmPageApi = {
   },
 
   async sendWhatsAppFile(body: any) {
-    const tabId = String(body?.tabId || body?.id || '').trim();
+    const tabId = resolvePreferredTabId(body?.tabId || body?.id);
     const chat = String(body?.chat || '').trim();
-    const filePath = String(body?.filePath || body?.file || '').trim();
     const caption = String(body?.caption || '');
-
-    if (!tabId) {
-      throw new Error('TAB_ID_REQUIRED');
-    }
     if (!chat) {
       throw new Error('WHATSAPP_CHAT_REQUIRED');
     }
-    if (!filePath) {
-      throw new Error('WHATSAPP_FILE_REQUIRED');
-    }
-
-    const file = validateWhatsAppSendFilePath(filePath);
     const policy = assertCanSendToWhatsAppChat({
       chat,
       allowExternalSend: body?.allowExternalSend === true,
@@ -1090,36 +1437,136 @@ export const vlmPageApi = {
         ok: false,
         reason: policy.reason,
         chat: policy.chat || chat,
-        file,
+        file: null,
+        files: null,
         sent: false,
         policy,
       };
     }
 
-    const open = await this.openWhatsAppChat({
-      tabId,
-      chat: policy.chat,
-    });
-    if (!open.ok) {
+    const files = validateWhatsAppSendFilePaths(body);
+
+    const tab = getTabOrThrow(tabId);
+    const before = {
+      url: tab.webContents.getURL(),
+      domHash: await getDomHash(tab),
+    };
+
+    const openChat = await this.openWhatsAppChatInternal(tabId, policy.chat);
+    if (!openChat.ok) {
       return {
         ok: false,
-        reason: 'OPEN_CHAT_FAILED',
+        reason: 'WHATSAPP_CHAT_OPEN_FAILED',
         chat: policy.chat,
-        file,
-        sent: false,
-        open,
+        file: files.files[0] || null,
+        files,
+        caption,
+        openChat,
+        copyResult: null,
+        focusResult: null,
+        pasteResult: null,
+        preview: null,
+        send: null,
+        verification: null,
       };
     }
 
-    return {
-      ok: false,
-      reason: 'FILE_UPLOAD_NOT_IMPLEMENTED_YET',
+    let copyResult: any = null;
+    let focusResult: any = null;
+    let pasteResult: any = null;
+    let preview: any = null;
+    let captionResult: any = null;
+    let send: any = null;
+    let verification: any = null;
+    copyResult = await copyFilesToWindowsClipboard(files.files.map((item) => item.path));
+    if (!copyResult.ok) {
+      return {
+        ok: false,
+        reason: 'FILES_CLIPBOARD_COPY_FAILED',
+        chat: policy.chat,
+        file: files.files[0] || null,
+        files,
+        caption,
+        openChat,
+        copyResult,
+        focusResult,
+        pasteResult,
+        preview,
+        send,
+        verification,
+      };
+    }
+
+    focusResult = await focusWhatsAppMessageBox(tabId);
+    if (!focusResult.ok) {
+      return {
+        ok: false,
+        reason: 'WHATSAPP_MESSAGE_BOX_FOCUS_FAILED',
+        chat: policy.chat,
+        file: files.files[0] || null,
+        files,
+        caption,
+        openChat,
+        copyResult,
+        focusResult,
+        pasteResult,
+        preview,
+        send,
+        verification,
+      };
+    }
+
+    pasteResult = await pasteFilesIntoWhatsApp(tab);
+    preview = await waitForWhatsAppPastePreview(tab, files.files.map((item) => item.name), 60000);
+
+    if (caption.trim()) {
+      captionResult = await typeWhatsAppCaption(tabId, caption);
+    }
+
+    await sleep(500);
+    send = await pressWhatsAppEnterToSend(tab);
+    verification = await waitForWhatsAppSendComplete(tab, files.files.map((item) => item.name), 60000);
+
+    const ok = Boolean(copyResult?.ok && focusResult?.ok && pasteResult?.ok && preview?.ok && send?.ok && verification?.ok);
+    const reason = ok ? 'WHATSAPP_FILES_SENT' : 'WHATSAPP_FILES_SEND_NOT_VERIFIED';
+    const evidence = await collectActionEvidence(tab, before, {
       chat: policy.chat,
-      file,
+      files,
       caption,
-      sent: false,
-      policy: policy.reason,
-      open,
+      openChat,
+      copyResult,
+      focusResult,
+      pasteResult,
+      preview,
+      captionResult,
+      send,
+      verification,
+    });
+    await logAction(
+      tab,
+      'whatsapp_send_files_clipboard',
+      { chat: policy.chat, files: files.files.map((item) => item.name) },
+      caption,
+      ok,
+      reason,
+      evidence,
+    );
+
+    return {
+      ok,
+      reason,
+      chat: policy.chat,
+      file: files.files[0] || null,
+      files,
+      caption,
+      openChat,
+      copyResult,
+      focusResult,
+      pasteResult,
+      preview,
+      captionResult,
+      send,
+      verification,
     };
   },
 

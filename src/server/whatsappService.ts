@@ -124,3 +124,35 @@ export function validateWhatsAppSendFilePath(filePath: string) {
     name: path.basename(resolved),
   };
 }
+
+export function validateWhatsAppSendFilePaths(input: {
+  filePath?: string;
+  file?: string;
+  filePaths?: string[];
+}) {
+  const rawFiles = [
+    ...(Array.isArray(input.filePaths) ? input.filePaths : []),
+    typeof input.filePath === 'string' ? input.filePath : '',
+    typeof input.file === 'string' ? input.file : '',
+  ]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+
+  const uniqueFiles = Array.from(new Set(rawFiles));
+  if (uniqueFiles.length < 1) {
+    throw new Error('WHATSAPP_FILE_REQUIRED');
+  }
+
+  const files = uniqueFiles.map((filePath) => validateWhatsAppSendFilePath(filePath));
+  const totalBytes = files.reduce((sum, file) => sum + file.sizeBytes, 0);
+  const maxTotalBytes = 500 * 1024 * 1024;
+
+  if (totalBytes > maxTotalBytes) {
+    throw new Error('FILES_TOTAL_TOO_LARGE');
+  }
+
+  return {
+    files,
+    totalBytes,
+  };
+}

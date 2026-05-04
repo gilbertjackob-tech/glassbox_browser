@@ -26,9 +26,9 @@ Agent control:
 
 WhatsApp:
   npm run gb -- whatsapp list-chats
-  npm run gb -- whatsapp open-chat --tabId "<TAB_ID>" --chat "Bihi"
-  npm run gb -- whatsapp send-message --tabId "<TAB_ID>" --chat "Hasnat (You)" --message "test" [--allowExternalSend]
-  npm run gb -- whatsapp send-file --tabId "<TAB_ID>" --chat "Hasnat (You)" --file "P:\\Hasnat\\test.pdf" [--caption "test file"] [--allowExternalSend]
+  npm run gb -- whatsapp open-chat [--tabId "<TAB_ID>"] --chat "Bihi"
+  npm run gb -- whatsapp send-message [--tabId "<TAB_ID>"] --chat "Hasnat (You)" --message "test" [--allowExternalSend]
+  npm run gb -- whatsapp send-file [--tabId "<TAB_ID>"] --chat "Hasnat (You)" --file "P:\\Hasnat\\test.pdf" [--file "P:\\Hasnat\\test2.pdf"] [--caption "test file"] [--allowExternalSend]
 `);
   process.exit(exitCode);
 }
@@ -44,10 +44,21 @@ function parseArgs(argv) {
 
     const [rawKey, inlineValue] = arg.slice(2).split(/=(.*)/s, 2);
     const key = rawKey === 'sel' ? 'selector' : rawKey;
+    const assignValue = (value) => {
+      if (key === 'file') {
+        if (!Array.isArray(out.file)) {
+          out.file = typeof out.file === 'string' ? [out.file] : [];
+        }
+        out.file.push(value);
+        return;
+      }
+      out[key] = value;
+    };
+
     if (inlineValue !== undefined) {
-      out[key] = inlineValue;
+      assignValue(inlineValue);
     } else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
-      out[key] = argv[i + 1];
+      assignValue(argv[i + 1]);
       i += 1;
     } else {
       out[key] = true;
@@ -256,7 +267,7 @@ async function main() {
     }
 
     if (subcommand === 'open-chat') {
-      if (typeof args.tabId !== 'string' || !args.chat) usage();
+      if (!args.chat) usage();
       printJson(await requestJson('/api/whatsapp/open-chat', {
         method: 'POST',
         body: JSON.stringify({
@@ -268,7 +279,7 @@ async function main() {
     }
 
     if (subcommand === 'send-message') {
-      if (typeof args.tabId !== 'string' || !args.chat || typeof args.message !== 'string') usage();
+      if (!args.chat || typeof args.message !== 'string') usage();
       printJson(await requestJson('/api/whatsapp/send-message', {
         method: 'POST',
         body: JSON.stringify({
@@ -282,14 +293,29 @@ async function main() {
     }
 
     if (subcommand === 'send-file') {
-      const filePath = typeof args.file === 'string' ? args.file : typeof args.filePath === 'string' ? args.filePath : '';
-      if (typeof args.tabId !== 'string' || !args.chat || !filePath) usage();
+      const fileValues = Array.isArray(args.file)
+        ? args.file
+        : typeof args.file === 'string'
+          ? [args.file]
+          : [];
+      const extraFilePath = typeof args.filePath === 'string' ? [args.filePath] : [];
+      const filesJson = typeof args.filesJson === 'string'
+        ? JSON.parse(args.filesJson)
+        : [];
+      const filePaths = [
+        ...fileValues,
+        ...extraFilePath,
+        ...(Array.isArray(filesJson) ? filesJson : []),
+      ].filter((item) => typeof item === 'string' && item.trim());
+
+      if (!args.chat || filePaths.length < 1) usage();
       printJson(await requestJson('/api/whatsapp/send-file', {
         method: 'POST',
         body: JSON.stringify({
           tabId: args.tabId,
           chat: args.chat,
-          filePath,
+          filePath: filePaths[0],
+          filePaths,
           caption: typeof args.caption === 'string' ? args.caption : '',
           allowExternalSend: Boolean(args.allowExternalSend),
         }),
