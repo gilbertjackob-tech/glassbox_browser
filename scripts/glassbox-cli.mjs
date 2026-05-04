@@ -16,6 +16,7 @@ Profiles:
   npm run gb -- open --profile <slug> [--url <url>]
 
 Agent control:
+  npm run gb -- task run-smart "send this file to Bihi on WhatsApp" [--file path] [--message text] [--profile id] [--allowExternalSend] [--dryRun]
   npm run gb -- snapshot --tab <tabId> [--out file.html]
   npm run gb -- screenshot --tab <tabId> [--out file.png] [--sel "..."] [--highlight]
   npm run gb -- query --tab <tabId> --sel "..."
@@ -190,6 +191,42 @@ async function main() {
 
     printJson(launchElectron(profile, url));
     return;
+  }
+
+  if (command === 'task') {
+    if (subcommand === 'run-smart') {
+      const goal = rest.join(' ').trim();
+      const fileValues = Array.isArray(args.file)
+        ? args.file
+        : typeof args.file === 'string'
+          ? [args.file]
+          : [];
+      const extraFilePath = typeof args.filePath === 'string' ? [args.filePath] : [];
+      const filesJson = typeof args.filesJson === 'string'
+        ? JSON.parse(args.filesJson)
+        : [];
+      const filePaths = [
+        ...fileValues,
+        ...extraFilePath,
+        ...(Array.isArray(filesJson) ? filesJson : []),
+      ].filter((item) => typeof item === 'string' && item.trim());
+
+      if (!goal) usage();
+      printJson(await requestJson('/api/task/run-smart', {
+        method: 'POST',
+        body: JSON.stringify({
+          goal,
+          profileId: typeof args.profile === 'string' ? args.profile : args.profileId,
+          filePath: filePaths[0] || '',
+          message: typeof args.message === 'string' ? args.message : '',
+          allowExternalSend: Boolean(args.allowExternalSend || args['allow-external-send']),
+          dryRun: Boolean(args.dryRun || args['dry-run']),
+        }),
+      }));
+      return;
+    }
+
+    usage();
   }
 
   if (command === 'snapshot') {

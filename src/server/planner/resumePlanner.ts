@@ -11,7 +11,7 @@
  * Into: "Skip: already in Bihi chat. Skip: file attached. Next: press send."
  */
 
-import type { WorldState } from './worldStateService';
+import type { WorldState } from '../state/worldStateService';
 
 export interface ResumeStep {
   id: string;

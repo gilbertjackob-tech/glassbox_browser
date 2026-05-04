@@ -12,6 +12,40 @@ No success without evidence.
 
 Actions are not treated as successful just because an input event was sent. GlassBox resolves a target, performs the action, verifies the resulting state change, and stores the result locally.
 
+## Primary usage
+
+The main user workflow is one-step smart execution:
+
+```txt
+POST /api/task/run-smart
+glassbox task run-smart "<goal>"
+```
+
+Example API call:
+
+```json
+{
+  "goal": "send this file to Bihi on WhatsApp",
+  "filePath": "C:\\Users\\DELL\\Downloads\\a.pdf",
+  "allowExternalSend": true
+}
+```
+
+Example CLI call:
+
+```powershell
+npm run gb -- task run-smart "send this file to Bihi on WhatsApp" --file "C:\Users\DELL\Downloads\a.pdf" --allowExternalSend
+```
+
+Internally GlassBox now:
+
+- inspects current world, tab, profile, and room state
+- reuses already-open tabs, pages, and chats when possible
+- skips already-satisfied steps
+- executes only the minimum missing steps
+- verifies success before returning success
+- records learning only from verified success
+
 ## Current scope
 
 Implemented and live in the repo:

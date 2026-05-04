@@ -464,6 +464,62 @@ async function typeWhatsAppCaption(tabId: string, caption: string) {
   };
 }
 
+async function getWhatsAppActiveChatState(tab: TabMetadata) {
+  const result = await runInPage(tab, () => {
+    const header = document.querySelector('header');
+    const text = (header?.textContent || '').replace(/\s+/g, ' ').trim();
+    return {
+      found: Boolean(header),
+      text,
+      normalized: text.toLowerCase(),
+    };
+  }).catch(() => null as any);
+
+  return result || {
+    found: false,
+    text: '',
+    normalized: '',
+  };
+}
+
+async function getWhatsAppFilePreviewState(tab: TabMetadata, fileNames: string[]) {
+  const result = await runInPage(tab, (names: string[], sendSelectors: string[]) => {
+    const text = document.body?.innerText || '';
+    const isVisible = (node: Element) => {
+      const rect = (node as HTMLElement).getBoundingClientRect();
+      const style = window.getComputedStyle(node as Element);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    };
+
+    const previewVisible =
+      Boolean(Array.from(document.querySelectorAll('[role="dialog"]')).find((node) => isVisible(node))) ||
+      sendSelectors.some((selector) =>
+        Array.from(document.querySelectorAll(selector)).some((node) => isVisible(node))
+      );
+    const fileNameSeen = names.some((name) => text.includes(name));
+    const captionBoxVisible = Boolean(
+      Array.from(document.querySelectorAll('[contenteditable="true"][role="textbox"], div[contenteditable="true"]'))
+        .find((node) => isVisible(node) && !node.closest('footer'))
+    );
+
+    return {
+      ok: previewVisible && fileNameSeen,
+      previewVisible,
+      fileNameSeen,
+      captionBoxVisible,
+      textSample: text.slice(0, 500),
+    };
+  }, [fileNames, WHATSAPP_PREVIEW_SEND_SELECTORS]).catch(() => null as any);
+
+  return result || {
+    ok: false,
+    previewVisible: false,
+    fileNameSeen: false,
+    captionBoxVisible: false,
+    textSample: '',
+  };
+}
+
 async function ensureSitePackSkillsInstalled(profileId: string, host: string) {
   const pack = getSitePackForHost(host);
   if (!pack) {
@@ -1198,6 +1254,27 @@ export const vlmPageApi = {
     };
   },
 
+  async getWhatsAppActiveChat(tabId: string) {
+    const tab = getTabOrThrow(tabId);
+    const state = await getWhatsAppActiveChatState(tab);
+    return {
+      ok: Boolean(state?.found),
+      ...state,
+    };
+  },
+
+  async getWhatsAppFilePreview(tabId: string, body: any) {
+    const tab = getTabOrThrow(tabId);
+    const fileNames = Array.isArray(body?.fileNames)
+      ? body.fileNames.map((item: unknown) => String(item || '').trim()).filter(Boolean)
+      : [];
+    const state = await getWhatsAppFilePreviewState(tab, fileNames);
+    return {
+      ok: Boolean(state?.ok),
+      ...state,
+    };
+  },
+
   async openWhatsAppChatInternal(tabId: string, chat: string) {
     const cleanChat = String(chat || '').trim();
     if (!cleanChat) {
@@ -1226,6 +1303,39 @@ export const vlmPageApi = {
         room,
         reason: 'WHATSAPP_AUTH_REQUIRED',
       };
+    }
+
+    if (room.room === 'whatsapp_chat') {
+      const activeChat = await getWhatsAppActiveChatState(tab);
+      const normalizedChat = cleanChat.toLowerCase();
+      const alreadyActive = Boolean(activeChat?.normalized && activeChat.normalized.includes(normalizedChat));
+
+      if (alreadyActive) {
+        const messageBox = await this.resolveTarget(tabId, {
+          targetKey: 'message_box',
+          kind: 'input',
+        }).catch((error: any) => ({ found: false, reason: error?.message || String(error) }));
+
+        const activeChatHeader = await this.resolveTarget(tabId, {
+          targetKey: 'active_chat_header',
+          kind: 'card',
+        }).catch((error: any) => ({ found: false, reason: error?.message || String(error) }));
+
+        return {
+          ok: Boolean(messageBox?.found && activeChatHeader?.found),
+          chat: cleanChat,
+          installResult,
+          openChat: {
+            ok: true,
+            strategy: 'already_active_chat',
+            activeChat,
+          },
+          room,
+          messageBox,
+          activeChatHeader,
+          reason: 'WHATSAPP_CHAT_ALREADY_OPEN',
+        };
+      }
     }
 
     const searchChat = await this.actionResolveAndAct(tabId, {
@@ -1478,7 +1588,24 @@ export const vlmPageApi = {
     let captionResult: any = null;
     let send: any = null;
     let verification: any = null;
-    copyResult = await copyFilesToWindowsClipboard(files.files.map((item) => item.path));
+    const currentPreview = await getWhatsAppFilePreviewState(tab, files.files.map((item) => item.name));
+
+    if (currentPreview.ok) {
+      copyResult = {
+        ok: true,
+        reason: 'WHATSAPP_FILE_PREVIEW_ALREADY_VISIBLE',
+        reusedPreview: true,
+      };
+      preview = {
+        ok: true,
+        reason: 'WHATSAPP_FILE_PREVIEW_READY',
+        reused: true,
+        result: currentPreview,
+      };
+    } else {
+      copyResult = await copyFilesToWindowsClipboard(files.files.map((item) => item.path));
+    }
+
     if (!copyResult.ok) {
       return {
         ok: false,
@@ -1497,27 +1624,38 @@ export const vlmPageApi = {
       };
     }
 
-    focusResult = await focusWhatsAppMessageBox(tabId);
-    if (!focusResult.ok) {
-      return {
-        ok: false,
-        reason: 'WHATSAPP_MESSAGE_BOX_FOCUS_FAILED',
-        chat: policy.chat,
-        file: files.files[0] || null,
-        files,
-        caption,
-        openChat,
-        copyResult,
-        focusResult,
-        pasteResult,
-        preview,
-        send,
-        verification,
+    if (!currentPreview.ok) {
+      focusResult = await focusWhatsAppMessageBox(tabId);
+      if (!focusResult.ok) {
+        return {
+          ok: false,
+          reason: 'WHATSAPP_MESSAGE_BOX_FOCUS_FAILED',
+          chat: policy.chat,
+          file: files.files[0] || null,
+          files,
+          caption,
+          openChat,
+          copyResult,
+          focusResult,
+          pasteResult,
+          preview,
+          send,
+          verification,
+        };
+      }
+
+      pasteResult = await pasteFilesIntoWhatsApp(tab);
+      preview = await waitForWhatsAppPastePreview(tab, files.files.map((item) => item.name), 60000);
+    } else {
+      focusResult = {
+        ok: true,
+        reason: 'WHATSAPP_PREVIEW_REUSED',
+      };
+      pasteResult = {
+        ok: true,
+        reason: 'WHATSAPP_PREVIEW_REUSED',
       };
     }
-
-    pasteResult = await pasteFilesIntoWhatsApp(tab);
-    preview = await waitForWhatsAppPastePreview(tab, files.files.map((item) => item.name), 60000);
 
     if (caption.trim()) {
       captionResult = await typeWhatsAppCaption(tabId, caption);

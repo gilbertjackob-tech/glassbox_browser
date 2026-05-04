@@ -11,6 +11,7 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "electron:dev": "node scripts/electron-dev.mjs",
     "gb": "node scripts/glassbox-cli.mjs",
+    "test:smart-task": "tsx scripts/test-smart-task.ts",
     "test:whatsapp:file": "node scripts/test-whatsapp-send-files-clipboard.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",

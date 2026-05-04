@@ -11,7 +11,7 @@
 
 export interface TabReadinessInfo {
   isLoading: boolean;
-  readyState: 'loading' | 'interactive' | 'complete' | 'app_ready';
+  readyState: 'loading' | 'interactive' | 'complete' | 'app_ready' | 'unknown';
   loadingTimeMs?: number;
   isAuthPage: boolean;
   isLoggedIn: boolean | null; // null = unknown

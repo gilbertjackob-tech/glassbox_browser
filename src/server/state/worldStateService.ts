@@ -12,9 +12,6 @@
  * This is the foundation for resumable task planning.
  */
 
-import type { TabManager } from '../tabManager';
-import type { VLMPageApi } from '../vlmPageApi';
-
 export interface TabSnapshot {
   tabId: string;
   url: string;
@@ -64,8 +61,8 @@ export interface WorldState {
 }
 
 export async function getWorldState(
-  tabManager: TabManager,
-  vlmPageApi: VLMPageApi,
+  tabManager: any,
+  vlmPageApi: any,
   profileId?: string
 ): Promise<WorldState> {
   const tabs: TabSnapshot[] = [];
@@ -73,9 +70,18 @@ export async function getWorldState(
   const visibleTargets: Array<VisibleTarget & { tabId: string }> = [];
 
   // Gather tab snapshots
-  const allTabs = tabManager.getTabs();
-  for (const tab of allTabs) {
-    if (profileId && tab.profileId !== profileId) {
+  const allTabs = typeof tabManager.getAllTabs === 'function'
+    ? tabManager.getAllTabs()
+    : [];
+  for (const summary of allTabs) {
+    if (profileId && summary.profileId !== profileId) {
+      continue;
+    }
+
+    const tab = typeof tabManager.getTab === 'function'
+      ? tabManager.getTab(summary.tabId)
+      : null;
+    if (!tab) {
       continue;
     }
 

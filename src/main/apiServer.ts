@@ -11,6 +11,7 @@ import { getSitePackForHost, listSitePacks } from '../server/sitePacks/index.js'
 import { listMicroSkills, saveMicroSkill } from '../server/skillService.js';
 import { tabManager } from '../server/tabManager.js';
 import { listTargetMemory, siteHostFromUrl } from '../server/targetMemoryService.js';
+import { runSmartTask } from '../server/tasks/smartTaskOrchestrator.js';
 import { vlmPageApi } from '../server/vlmPageApi.js';
 
 function getTableColumns(tableName: string): string[] {
@@ -565,6 +566,14 @@ export function startApiServer(port: number = 3000): Promise<void> {
     app.post('/api/whatsapp/send-file', async (req, res) => {
       try {
         res.json(await vlmPageApi.sendWhatsAppFile(req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/task/run-smart', async (req, res) => {
+      try {
+        res.json(await runSmartTask(req.body || {}));
       } catch (error: any) {
         errorResponse(res, error);
       }
