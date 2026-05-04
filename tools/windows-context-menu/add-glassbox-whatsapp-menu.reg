@@ -1,0 +1,43 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp]
+"MUIVerb"="Send to WhatsApp"
+"SubCommands"=""
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell]
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\01Hasnat]
+"MUIVerb"="Hasnat (You)"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\01Hasnat\command]
+@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Hasnat (You)\" --file \"%1\""
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\02Bihi]
+"MUIVerb"="Bihi"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\02Bihi\command]
+@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Bihi\" --file \"%1\" --allowExternalSend"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\03Family]
+"MUIVerb"="আমাদের পরিবার"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\03Family\command]
+@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"আমাদের পরিবার\" --file \"%1\" --allowExternalSend"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\04Tasfia]
+"MUIVerb"="Tasfia New"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\04Tasfia\command]
+@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Tasfia New\" --file \"%1\" --allowExternalSend"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\05Ammu]
+"MUIVerb"="Ammu"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\05Ammu\command]
+@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Ammu\" --file \"%1\" --allowExternalSend"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\06Abbu]
+"MUIVerb"="Abbu 2"
+
+[HKEY_CLASSES_ROOT\*\shell\GlassBoxWhatsApp\shell\06Abbu\command]
+@="cmd.exe /k node \"P:\\Hasnat\\mirror_browser\\scripts\\glassbox-cli.mjs\" whatsapp send-file --chat \"Abbu 2\" --file \"%1\" --allowExternalSend"

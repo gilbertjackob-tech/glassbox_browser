@@ -22,12 +22,20 @@ Implemented and live in the repo:
 - Micro-skill save, list, and replay
 - Site-room detection and room-specific suggestions
 - Safe suggestion execution through saved skills only
+- WhatsApp static-contact API and CLI for:
+  - listing approved chats
+  - opening an exact WhatsApp chat
+  - sending a real self-message
+  - guarded external sends
+  - validated file-send stub for future upload wiring
+- Windows right-click context-menu installer for `Send to WhatsApp`
 - Fast packs for:
   - Google Search
   - YouTube
   - GitHub
   - ChatGPT
   - Gemini
+  - WhatsApp Web
 
 ## Stack
 
@@ -181,6 +189,13 @@ The local API is served by the Electron main process on `http://127.0.0.1:3000`.
 - `GET /api/tabs/:id/site-room`
 - `GET /api/tabs/:id/site-room/suggestions`
 
+### WhatsApp static API
+
+- `GET /api/whatsapp/static-chats`
+- `POST /api/whatsapp/open-chat`
+- `POST /api/whatsapp/send-message`
+- `POST /api/whatsapp/send-file`
+
 ### Memory and credentials
 
 - `GET /api/memory/targets`
@@ -241,6 +256,7 @@ Current packs:
 - GitHub
 - ChatGPT
 - Gemini
+- WhatsApp Web
 
 Starter packs are used only after target memory fails. A pack target must still be verified against the live DOM before use.
 
@@ -346,6 +362,41 @@ Guarded/disabled:
 - sharing/deletes
 - account/workspace/billing actions
 
+### WhatsApp Web
+
+- `whatsapp_auth`
+- `whatsapp_home`
+- `whatsapp_chat`
+- `whatsapp_unknown`
+
+Safe skills:
+
+- `whatsapp_search_chat`
+- `whatsapp_open_first_chat`
+- `whatsapp_open_chat`
+- `whatsapp_prepare_message`
+
+Static WhatsApp chats exposed by the API:
+
+- `Hasnat (You)`
+- `Bihi`
+- `আমাদের পরিবার`
+- `Tasfia New`
+- `Ammu`
+- `Abbu 2`
+
+Current send policy:
+
+- `Hasnat (You)` is treated as self chat and is send-allowed by default
+- other static chats require `allowExternalSend: true`
+
+Current send-file status:
+
+- `/api/whatsapp/send-file` validates the path and chat policy
+- it opens the target chat
+- it currently returns `FILE_UPLOAD_NOT_IMPLEMENTED_YET`
+- real file upload through Electron/CDP is the next layer, not complete yet
+
 ## Room-aware suggestions
 
 `GET /api/tabs/:id/site-room/suggestions` returns room-aware suggestions only. It does not act.
@@ -382,7 +433,40 @@ npm run gb -- open --profile work --url https://example.com
 npm run gb -- query --tab <tabId> --sel "button"
 npm run gb -- click --tab <tabId> --sel "button.login"
 npm run gb -- type --tab <tabId> --sel "input[name='email']" --text "user@example.com"
+npm run gb -- whatsapp list-chats
+npm run gb -- whatsapp open-chat --tabId <tabId> --chat "Hasnat (You)"
+npm run gb -- whatsapp send-message --tabId <tabId> --chat "Hasnat (You)" --message "test"
+npm run gb -- whatsapp send-file --tabId <tabId> --chat "Hasnat (You)" --file "P:\Hasnat\test.pdf" --caption "test file"
 ```
+
+## Windows context menu
+
+The repo includes Windows registry helpers under [tools/windows-context-menu](p:/Hasnat/mirror_browser/tools/windows-context-menu):
+
+- `add-glassbox-whatsapp-menu.reg`
+- `remove-glassbox-whatsapp-menu.reg`
+- `install-whatsapp-menu.ps1`
+- `remove-whatsapp-menu.ps1`
+
+This adds:
+
+```txt
+Right-click file -> Send to WhatsApp -> static chat names
+```
+
+Install:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\windows-context-menu\install-whatsapp-menu.ps1
+```
+
+Remove:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\windows-context-menu\remove-whatsapp-menu.ps1
+```
+
+The context menu calls the GlassBox CLI, so the GlassBox app/API must already be running.
 
 ## Keyboard shortcuts and shell UX
 
@@ -430,6 +514,12 @@ Site fast-pack scripts:
 - `test-github-fast-pack.mjs`
 - `test-chatgpt-fast-pack.mjs`
 - `test-gemini-fast-pack.mjs`
+- `test-whatsapp-browser-identity.mjs`
+- `test-whatsapp-fast-pack.mjs`
+- `test-whatsapp-static-api.mjs`
+- `test-whatsapp-send-message-self.mjs`
+- `test-whatsapp-send-message-blocked.mjs`
+- `test-whatsapp-send-file-stub.mjs`
 
 Most debug folders are ignored by `.gitignore` through:
 
@@ -451,6 +541,12 @@ Not automated in the current fast-pack layer:
 - stars/follows
 - account/workspace settings
 - uploads and voice flows for LLM chat products
+
+Additional WhatsApp-specific safety:
+
+- external message sending is blocked unless `allowExternalSend: true`
+- file sending is not completed yet at the upload layer
+- calls, attach side-actions, status uploads, and profile/group-admin actions are not automated
 
 If a site requires login, the expected safe behavior is:
 
