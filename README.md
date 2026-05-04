@@ -182,6 +182,22 @@ Typecheck:
 npm run lint
 ```
 
+### Testing
+
+Run the smart-task unit and API dry-run tests locally:
+
+```powershell
+npm run test:smart-task
+npm run test:smart-task:api
+```
+
+Primary one-step workflow (API / CLI):
+
+```txt
+POST /api/task/run-smart
+npm run gb -- task run-smart "<goal>"
+```
+
 ## Local API
 
 The local API is served by the Electron main process on `http://127.0.0.1:3000`.
