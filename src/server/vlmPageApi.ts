@@ -12,6 +12,7 @@ import {
   targetMatchesKey,
 } from './targetMemoryService.js';
 import { resolveFromStarterPack } from './sitePackResolver.js';
+import { getSitePackForHost } from './sitePacks/index.js';
 import {
   getMicroSkill,
   markMicroSkillResult,
@@ -28,6 +29,12 @@ import {
   getWhatsAppRoomSuggestions,
   getYouTubeRoomSuggestions,
 } from './siteRooms/suggestions.js';
+import {
+  assertCanSendToWhatsAppChat,
+  assertKnownWhatsAppChat,
+  listStaticWhatsAppChats,
+  validateWhatsAppSendFilePath,
+} from './whatsappService.js';
 
 type TabMetadata = NonNullable<ReturnType<typeof tabManager.getTab>>;
 
@@ -92,6 +99,33 @@ async function runInPage<T>(tab: TabMetadata, fn: (...args: any[]) => T, args: a
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ensureSitePackSkillsInstalled(profileId: string, host: string) {
+  const pack = getSitePackForHost(host);
+  if (!pack) {
+    return {
+      ok: false,
+      reason: 'SITE_PACK_NOT_FOUND',
+      host,
+    };
+  }
+
+  const installed = (pack.microSkills || []).map((skill) =>
+    saveMicroSkill({
+      profileId,
+      name: skill.name,
+      queryPattern: skill.queryPattern,
+      steps: skill.steps,
+    })
+  );
+
+  return {
+    ok: true,
+    host: pack.host,
+    installedCount: installed.length,
+    installed,
+  };
 }
 
 async function getDomHash(tab: TabMetadata): Promise<string> {
@@ -791,6 +825,301 @@ export const vlmPageApi = {
       room: suggestionsResult.room,
       suggestion,
       runResult,
+    };
+  },
+
+  listWhatsAppStaticChats() {
+    return {
+      ok: true,
+      chats: listStaticWhatsAppChats(),
+    };
+  },
+
+  async openWhatsAppChatInternal(tabId: string, chat: string) {
+    const cleanChat = String(chat || '').trim();
+    if (!cleanChat) {
+      throw new Error('WHATSAPP_CHAT_REQUIRED');
+    }
+
+    const tab = getTabOrThrow(tabId);
+    const currentUrl = tab.webContents.getURL();
+    if (!/web\.whatsapp\.com/i.test(currentUrl)) {
+      await this.navigate(tabId, { url: 'https://web.whatsapp.com' });
+    }
+
+    let room = await this.getSiteRoom(tabId);
+    const started = Date.now();
+    while (room.room === 'whatsapp_unknown' && Date.now() - started < 20000) {
+      await sleep(1000);
+      room = await this.getSiteRoom(tabId);
+    }
+
+    const installResult = await ensureSitePackSkillsInstalled(tab.profileId, 'web.whatsapp.com');
+    if (room.room === 'whatsapp_auth') {
+      return {
+        ok: false,
+        chat: cleanChat,
+        installResult,
+        room,
+        reason: 'WHATSAPP_AUTH_REQUIRED',
+      };
+    }
+
+    const searchChat = await this.actionResolveAndAct(tabId, {
+      targetKey: 'chat_search_box',
+      kind: 'input',
+      action: 'type',
+      text: cleanChat,
+      clearFirst: true,
+    });
+
+    let exactRowSelector = '';
+    if (searchChat.ok) {
+      await sleep(1000);
+      const selectorResult = await this.evaluate(tabId, {
+        script: `
+          (() => {
+            const wanted = ${JSON.stringify(cleanChat)}.toLowerCase();
+            const rows = Array.from(document.querySelectorAll('[role="grid"] [role="row"], [data-testid^="list-item-"], [data-testid="cell-frame-container"], div[role="listitem"]'));
+            for (const row of rows) {
+              const text = (row.innerText || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+              if (!text || text === 'chats' || text === 'messages') continue;
+              if (!text.includes(wanted)) continue;
+              const dataTestId = row.getAttribute('data-testid');
+              if (dataTestId) {
+                return '[data-testid="' + dataTestId.replace(/"/g, '\\"') + '"]';
+              }
+              return '[role="grid"] [role="row"]';
+            }
+            return '';
+          })();
+        `,
+      }).catch(() => ({ ok: false, result: '' }));
+      exactRowSelector = typeof selectorResult?.result === 'string' ? selectorResult.result : '';
+    }
+
+    let openChat: any = null;
+    if (searchChat.ok && exactRowSelector) {
+      const clickResult = await this.click(tabId, { selector: exactRowSelector }).catch((error: any) => ({
+        ok: false,
+        reason: error?.message || String(error),
+      }));
+      openChat = {
+        ok: Boolean(clickResult?.ok),
+        strategy: 'exact_row_selector',
+        searchChat,
+        exactRowSelector,
+        clickResult,
+      };
+    } else {
+      openChat = await this.runMicroSkill(tabId, {
+        skill: 'whatsapp_open_chat',
+        inputs: { chat: cleanChat },
+        stopOnFailure: true,
+      });
+    }
+
+    const roomStarted = Date.now();
+    room = await this.getSiteRoom(tabId);
+    while (room.room !== 'whatsapp_chat' && Date.now() - roomStarted < 8000) {
+      await sleep(500);
+      room = await this.getSiteRoom(tabId);
+    }
+    const messageBox = await this.resolveTarget(tabId, {
+      targetKey: 'message_box',
+      kind: 'input',
+    }).catch((error: any) => ({ found: false, reason: error?.message || String(error) }));
+
+    const activeChatHeader = await this.resolveTarget(tabId, {
+      targetKey: 'active_chat_header',
+      kind: 'card',
+    }).catch((error: any) => ({ found: false, reason: error?.message || String(error) }));
+
+    const ok = Boolean(openChat?.ok) &&
+      room.room === 'whatsapp_chat' &&
+      Boolean(messageBox?.found) &&
+      Boolean(activeChatHeader?.found);
+
+    return {
+      ok,
+      chat: cleanChat,
+      installResult,
+      openChat,
+      room,
+      messageBox,
+      activeChatHeader,
+      reason: ok ? 'WHATSAPP_CHAT_OPEN' : 'WHATSAPP_CHAT_NOT_OPEN',
+    };
+  },
+
+  async openWhatsAppChat(body: any) {
+    const tabId = String(body?.tabId || body?.id || '').trim();
+    const chatInput = String(body?.chat || '').trim();
+    if (!tabId) {
+      throw new Error('TAB_ID_REQUIRED');
+    }
+    if (!chatInput) {
+      throw new Error('WHATSAPP_CHAT_REQUIRED');
+    }
+
+    const known = assertKnownWhatsAppChat(chatInput);
+    if (!known.ok) {
+      return {
+        ...known,
+        opened: false,
+      };
+    }
+
+    const open = await this.openWhatsAppChatInternal(tabId, known.chat);
+    return {
+      ok: Boolean(open.ok),
+      reason: open.ok ? 'WHATSAPP_CHAT_OPENED' : 'WHATSAPP_CHAT_OPEN_FAILED',
+      chat: known.chat,
+      opened: Boolean(open.ok),
+      install: open.installResult,
+      openChat: open.openChat,
+      room: open.room,
+      messageBox: open.messageBox,
+      activeHeader: open.activeChatHeader,
+    };
+  },
+
+  async sendWhatsAppMessage(body: any) {
+    const tabId = String(body?.tabId || body?.id || '').trim();
+    const chat = String(body?.chat || '').trim();
+    const message = String(body?.message || '');
+
+    if (!tabId) {
+      throw new Error('TAB_ID_REQUIRED');
+    }
+    if (!chat) {
+      throw new Error('WHATSAPP_CHAT_REQUIRED');
+    }
+    if (!message) {
+      throw new Error('WHATSAPP_MESSAGE_REQUIRED');
+    }
+
+    const sendPolicy = assertCanSendToWhatsAppChat({
+      chat,
+      allowExternalSend: body?.allowExternalSend === true,
+    });
+
+    if (!sendPolicy.ok) {
+      return {
+        ok: false,
+        reason: sendPolicy.reason,
+        chat,
+        sent: false,
+      };
+    }
+
+    const open = await this.openWhatsAppChat({
+      tabId,
+      chat: sendPolicy.chat,
+    });
+    if (!open.ok) {
+      return {
+        ok: false,
+        reason: 'OPEN_CHAT_FAILED',
+        chat: sendPolicy.chat,
+        policy: sendPolicy,
+        sent: false,
+        open,
+      };
+    }
+
+    const draft = await this.runMicroSkill(tabId, {
+      skill: 'whatsapp_prepare_message',
+      inputs: { message },
+      stopOnFailure: true,
+    });
+
+    if (!draft.ok) {
+      return {
+        ok: false,
+        reason: 'MESSAGE_DRAFT_FAILED',
+        chat: sendPolicy.chat,
+        sent: false,
+        open,
+        draft,
+      };
+    }
+
+    const send = await this.actionResolveAndAct(tabId, {
+      targetKey: 'send_button',
+      kind: 'button',
+      action: 'click',
+    });
+
+    return {
+      ok: Boolean(send.ok),
+      reason: send.ok ? 'MESSAGE_SENT' : 'SEND_CLICK_FAILED',
+      chat: sendPolicy.chat,
+      policy: sendPolicy.reason,
+      sent: Boolean(send.ok),
+      open,
+      draft,
+      send,
+    };
+  },
+
+  async sendWhatsAppFile(body: any) {
+    const tabId = String(body?.tabId || body?.id || '').trim();
+    const chat = String(body?.chat || '').trim();
+    const filePath = String(body?.filePath || body?.file || '').trim();
+    const caption = String(body?.caption || '');
+
+    if (!tabId) {
+      throw new Error('TAB_ID_REQUIRED');
+    }
+    if (!chat) {
+      throw new Error('WHATSAPP_CHAT_REQUIRED');
+    }
+    if (!filePath) {
+      throw new Error('WHATSAPP_FILE_REQUIRED');
+    }
+
+    const file = validateWhatsAppSendFilePath(filePath);
+    const policy = assertCanSendToWhatsAppChat({
+      chat,
+      allowExternalSend: body?.allowExternalSend === true,
+    });
+
+    if (!policy.ok) {
+      return {
+        ok: false,
+        reason: policy.reason,
+        chat: policy.chat || chat,
+        file,
+        sent: false,
+        policy,
+      };
+    }
+
+    const open = await this.openWhatsAppChat({
+      tabId,
+      chat: policy.chat,
+    });
+    if (!open.ok) {
+      return {
+        ok: false,
+        reason: 'OPEN_CHAT_FAILED',
+        chat: policy.chat,
+        file,
+        sent: false,
+        open,
+      };
+    }
+
+    return {
+      ok: false,
+      reason: 'FILE_UPLOAD_NOT_IMPLEMENTED_YET',
+      chat: policy.chat,
+      file,
+      caption,
+      sent: false,
+      policy: policy.reason,
+      open,
     };
   },
 

@@ -538,6 +538,38 @@ export function startApiServer(port: number = 3000): Promise<void> {
       }
     });
 
+    app.get('/api/whatsapp/static-chats', (_req, res) => {
+      try {
+        res.json(vlmPageApi.listWhatsAppStaticChats());
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/whatsapp/open-chat', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.openWhatsAppChat(req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/whatsapp/send-message', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.sendWhatsAppMessage(req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
+    app.post('/api/whatsapp/send-file', async (req, res) => {
+      try {
+        res.json(await vlmPageApi.sendWhatsAppFile(req.body || {}));
+      } catch (error: any) {
+        errorResponse(res, error);
+      }
+    });
+
     app.post('/api/tabs/:id/resolve-target', async (req, res) => {
       try {
         res.json(await vlmPageApi.resolveTarget(req.params.id, req.body || {}));

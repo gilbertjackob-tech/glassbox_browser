@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
-const API_BASE = process.env.GLASSBOX_API || 'http://127.0.0.1:3000';
+const API_BASE = process.env.GLASSBOX_API_BASE || process.env.GLASSBOX_API || 'http://127.0.0.1:3000';
 const isWindows = process.platform === 'win32';
 
 function usage(exitCode = 1) {
@@ -23,6 +23,12 @@ Agent control:
   npm run gb -- click --tab <tabId> --x 100 --y 200
   npm run gb -- type --tab <tabId> --sel "..." --text "..."
   npm run gb -- wait --tab <tabId> --sel "..." --until present
+
+WhatsApp:
+  npm run gb -- whatsapp list-chats
+  npm run gb -- whatsapp open-chat --tabId "<TAB_ID>" --chat "Bihi"
+  npm run gb -- whatsapp send-message --tabId "<TAB_ID>" --chat "Hasnat (You)" --message "test" [--allowExternalSend]
+  npm run gb -- whatsapp send-file --tabId "<TAB_ID>" --chat "Hasnat (You)" --file "P:\\Hasnat\\test.pdf" [--caption "test file"] [--allowExternalSend]
 `);
   process.exit(exitCode);
 }
@@ -241,6 +247,57 @@ async function main() {
       }),
     }));
     return;
+  }
+
+  if (command === 'whatsapp') {
+    if (subcommand === 'list-chats') {
+      printJson(await requestJson('/api/whatsapp/static-chats'));
+      return;
+    }
+
+    if (subcommand === 'open-chat') {
+      if (typeof args.tabId !== 'string' || !args.chat) usage();
+      printJson(await requestJson('/api/whatsapp/open-chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          tabId: args.tabId,
+          chat: args.chat,
+        }),
+      }));
+      return;
+    }
+
+    if (subcommand === 'send-message') {
+      if (typeof args.tabId !== 'string' || !args.chat || typeof args.message !== 'string') usage();
+      printJson(await requestJson('/api/whatsapp/send-message', {
+        method: 'POST',
+        body: JSON.stringify({
+          tabId: args.tabId,
+          chat: args.chat,
+          message: args.message,
+          allowExternalSend: Boolean(args.allowExternalSend),
+        }),
+      }));
+      return;
+    }
+
+    if (subcommand === 'send-file') {
+      const filePath = typeof args.file === 'string' ? args.file : typeof args.filePath === 'string' ? args.filePath : '';
+      if (typeof args.tabId !== 'string' || !args.chat || !filePath) usage();
+      printJson(await requestJson('/api/whatsapp/send-file', {
+        method: 'POST',
+        body: JSON.stringify({
+          tabId: args.tabId,
+          chat: args.chat,
+          filePath,
+          caption: typeof args.caption === 'string' ? args.caption : '',
+          allowExternalSend: Boolean(args.allowExternalSend),
+        }),
+      }));
+      return;
+    }
+
+    usage();
   }
 
   usage();

@@ -8,6 +8,9 @@ export const whatsappPack: SiteStarterPack = {
       targetKey: 'chat_search_box',
       kind: 'input',
       selectors: [
+        'input[aria-label*="Search or start a new chat"]',
+        'input[placeholder*="Search or start a new chat"]',
+        'input[role="textbox"][placeholder*="Search"]',
         'div[contenteditable="true"][data-tab]',
         '[role="textbox"][contenteditable="true"]',
         'div[aria-label*="Search"][contenteditable="true"]',
@@ -23,6 +26,20 @@ export const whatsappPack: SiteStarterPack = {
       kind: 'card',
       selectors: [
         '[aria-label*="Chat list"] [role="listitem"]',
+        '[role="grid"] [role="row"]',
+        '[data-testid="cell-frame-container"]',
+        'div[role="listitem"]',
+      ],
+      actions: ['click'],
+      verify: {
+        domChanged: true,
+      },
+    },
+    {
+      targetKey: 'first_chat_result',
+      kind: 'card',
+      selectors: [
+        '[aria-label*="Search results"] [role="listitem"]',
         '[role="grid"] [role="row"]',
         '[data-testid="cell-frame-container"]',
         'div[role="listitem"]',
@@ -145,6 +162,32 @@ export const whatsappPack: SiteStarterPack = {
         {
           name: 'open first chat',
           targetKey: 'first_chat',
+          kind: 'card',
+          action: 'click',
+          verify: {
+            domChanged: true,
+          },
+        },
+      ],
+    },
+    {
+      name: 'whatsapp_open_chat',
+      queryPattern: 'open whatsapp chat',
+      steps: [
+        {
+          name: 'search chat',
+          targetKey: 'chat_search_box',
+          kind: 'input',
+          action: 'type',
+          text: '{{chat}}',
+          clearFirst: true,
+          verify: {
+            valueChanged: true,
+          },
+        },
+        {
+          name: 'open first matching chat',
+          targetKey: 'first_chat_result',
           kind: 'card',
           action: 'click',
           verify: {
